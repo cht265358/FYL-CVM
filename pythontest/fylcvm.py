@@ -48,36 +48,16 @@ class FYLCVM:       #base class for FCC
         partition=self.compute_partition_function(site_potential)
         #two body cluster
         two_body_energy=0
-        for i,j in itertools.product(range(self.component), repeat=2):
-            probij=0
-            for k,l in itertools.product(range(self.component), repeat=2):
-                probij+=prob[i][j][k][l]
-            two_body_energy+=probij*np.log(probij)*T
-        for i,k in itertools.product(range(self.component), repeat=2):
-            probij=0
-            for j,l in itertools.product(range(self.component), repeat=2):
-                probij+=prob[i][j][k][l]
-            two_body_energy+=probij*np.log(probij)*T
-        for i,l in itertools.product(range(self.component), repeat=2):
-            probij=0
-            for j,k in itertools.product(range(self.component), repeat=2):
-                probij+=prob[i][j][k][l]
-            two_body_energy+=probij*np.log(probij)*T
-        for j,k in itertools.product(range(self.component), repeat=2):
-            probij=0
-            for i,l in itertools.product(range(self.component), repeat=2):
-                probij+=prob[i][j][k][l]
-            two_body_energy+=probij*np.log(probij)*T
-        for j,l in itertools.product(range(self.component), repeat=2):
-            probij=0
-            for i,k in itertools.product(range(self.component), repeat=2):
-                probij+=prob[i][j][k][l]
-            two_body_energy+=probij*np.log(probij)*T
-        for k,l in itertools.product(range(self.component), repeat=2):
-            probij=0
-            for i,j in itertools.product(range(self.component), repeat=2):
-                probij+=prob[i][j][k][l]
-            two_body_energy+=probij*np.log(probij)*T
+        for i in range(self.clustersize):
+            for j in range(i+1,self.clustersize):
+                for k,l in itertools.product(range(self.component), repeat=2):     #decorate this line later
+                    position_type_matrix=np.zeros((2,2))
+                    position_type_matrix[0][0]=i
+                    position_type_matrix[0][1]=j
+                    position_type_matrix[1][0]=k
+                    position_type_matrix[1][1]=l
+                    probij=utility.get_cluster_prob(prob,position_type_matrix)
+        two_body_energy+=probij*np.log(probij)*T
         pointenergy=0
         point_prob=np.zeros(self.maxsize)
         for i in range(self.component):
