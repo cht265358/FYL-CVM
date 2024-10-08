@@ -30,3 +30,12 @@ for i,j in itertools.product(range(self.component), repeat=2):
             probij=0
             for i,j in itertools.product(range(self.component), repeat=2):
                 probij+=prob[i][j][k][l]
+
+        #energy constraint
+        penalty_parameter=1000                                #set is to large value later
+        constraint_function=0
+        computed_comp=np.zeros(self.component)
+        for i in range(self.component):
+            for j in range(self.clustersize):
+                computed_comp[i]+=point_prob[i][j]/self.clustersize
+            constraint_function+=penalty_parameter*np.abs((computed_comp[i])-component_comp[i])
