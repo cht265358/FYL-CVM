@@ -13,9 +13,10 @@ from multiprocessing import Pool
 #svm stands for site_variable_matrix
 
 class FYLCVM:       #base class for FCC
-    def __init__(self,component,maxsize,E,vibration_parameter,elastic_para,control_dict):                #initialize all variables
+    def __init__(self,component,maxsize,E,vibration_parameter,elastic_para,potential_precision,Rin):                #initialize all variables
         print("start FYL-CVM")
-        kB=1.380649e-23  #boltzman constant, unit:J/K
+        self.Ruse=Rin
+        print("R is "+str(self.Ruse))
         N=6.02e23;       #number of particles, the size of the system, here we use 1 mole
         self.lattice="FCC"
         self.component=component
@@ -27,12 +28,7 @@ class FYLCVM:       #base class for FCC
         self.elastic_parameter=elastic_para
         self.starting_point_list=[]
         self.phase_boundary_list=[]
-        self.R=control_dict['R']
-        self.dmurough=control_dict['dmurough']
-        self.dmuprecise=control_dict['dmuprecise']
-        self.dmuscan=control_dict['dmuscan']
-        self.dT=control_dict['dT']
-        self.Tmax=control_dict['Tmax']
+        self.potential_precision=potential_precision
 
     def map_basic_cluster_energy(self,E):     #map the basic cluster energy to high dimensional array
         self.basicclusterenergy=np.zeros(self.shape)                  #use high dimensional array, input by hand now
@@ -47,7 +43,7 @@ class FYLCVM:       #base class for FCC
             self.vibrationalenergy[i][j][k][l]=Fmat[i+k+j+l]'''
     
     def map_vibrational_energy(self,vibpara,T):        #Assume symmetry wAA=wBB
-        Fmat=[0,-0.75*T*self.R*np.log(vibpara),-T*self.R*np.log(vibpara),-0.75*T*self.R*np.log(vibpara),0]
+        Fmat=[0,-0.75*self.Ruse*T*np.log(vibpara),-self.Ruse*T*np.log(vibpara),-0.75*self.Ruse*T*np.log(vibpara),0]
         for i,j,k,l in itertools.product(range(self.component), repeat=4):       #eith use an elegant way or write everything without loop at all
             self.vibrationalenergy[i][j][k][l]=Fmat[i+k+j+l]
 
@@ -59,37 +55,33 @@ class FYLCVM:       #base class for FCC
         denominator=0
         shape1=[self.component]*(self.clustersize-1)
         for i,j,k in itertools.product(range(self.component), repeat=3):
-            nominator+=(composition[1]-(1/self.clustersize)*(i+j+k+0))*svm[i][0]*svm[j][1]*svm[k][2]*np.exp(-self.basicclusterenergy[i][j][k][0]/(self.R*T))
-            denominator+=(-composition[1]+(1/self.clustersize)*(i+j+k+1))*svm[i][0]*svm[j][1]*svm[k][2]*np.exp(-self.basicclusterenergy[i][j][k][1]/(self.R*T))
+            nominator+=(composition[1]-(1/self.clustersize)*(i+j+k+0))*svm[i][0]*svm[j][1]*svm[k][2]*np.exp(-self.basicclusterenergy[i][j][k][0]/T)
+            denominator+=(-composition[1]+(1/self.clustersize)*(i+j+k+1))*svm[i][0]*svm[j][1]*svm[k][2]*np.exp(-self.basicclusterenergy[i][j][k][1]/T)
         svm[1][3]=nominator/denominator
-        return svm
+        return svm                                                        #check later to adjust for real unit
         
         #merge vibrational energy into basic cluster energy
     def compute_partition_function(self,svm,T,Fvib):
         if svm[0][0]==1:                 #matrix is for site variable
             partition=0
             for i,j,k,l in itertools.product(range(self.component), repeat=4):
-                partition+=svm[i][0]*svm[j][1]*svm[k][2]*svm[l][3]*np.exp((-self.basicclusterenergy[i][j][k][l]-Fvib[i][j][k][l])/(self.R*T))
+                partition+=svm[i][0]*svm[j][1]*svm[k][2]*svm[l][3]*np.exp((-self.basicclusterenergy[i][j][k][l]-Fvib[i][j][k][l])/T)  #no need to adjust here
             return partition
         else:                            #matrix is for site potential, svm is actually spm
             partition=0
             for i,j,k,l in itertools.product(range(self.component), repeat=4):
-                partition+=np.exp((svm[i][0]+svm[j][1]+svm[k][2]+svm[l][3]-self.basicclusterenergy[i][j][k][l]-Fvib[i][j][k][l])/(self.R*T))
+                partition+=np.exp((svm[i][0]+svm[j][1]+svm[k][2]+svm[l][3]-self.basicclusterenergy[i][j][k][l]-Fvib[i][j][k][l])/T)
             return partition
         
     def compute_basic_cluster_prob(self,partition,svm,T,Fvib):        #svm is site potential matrix
         basic_cluster_prob=np.zeros(self.shape)
         if svm[0][0]==1:                 #matrix is for site variable
             for i,j,k,l in itertools.product(range(self.component), repeat=4):
-                basic_cluster_prob[i][j][k][l]=svm[i][0]*svm[j][1]*svm[k][2]*svm[l][3]*np.exp((-self.basicclusterenergy[i][j][k][l]-Fvib[i][j][k][l])/(self.R*T))/partition
+                basic_cluster_prob[i][j][k][l]=svm[i][0]*svm[j][1]*svm[k][2]*svm[l][3]*np.exp((-self.basicclusterenergy[i][j][k][l]-Fvib[i][j][k][l])/(self.Ruse*T))/partition
         else:                            #matrix is for site potential, svm is actually spm
             for i,j,k,l in itertools.product(range(self.component), repeat=4):
-                basic_cluster_prob[i][j][k][l]=np.exp((svm[i][0]+svm[j][1]+svm[k][2]+svm[l][3]-self.basicclusterenergy[i][j][k][l]-Fvib[i][j][k][l])/(self.R*T))/partition
+                basic_cluster_prob[i][j][k][l]=np.exp((svm[i][0]+svm[j][1]+svm[k][2]+svm[l][3]-self.basicclusterenergy[i][j][k][l]-Fvib[i][j][k][l])/T)/partition
         return basic_cluster_prob
-    
-    def compute_additional_energy(self,vibrational,elastic,electronic):     #vibrational contains the ratio
-        if vibrational:
-            print("helloworld")
 
     def identify_phase(self,site_potential_input):                           #identify which phase is showing up
         count=0
@@ -97,7 +89,7 @@ class FYLCVM:       #base class for FCC
             if site_potential_input[i]==0:
                 return "A1"
             for j in range(i+1,self.clustersize):
-                if np.abs((site_potential_input[i]-site_potential_input[j])/site_potential_input[i])<3.0e-2 or np.abs(site_potential_input[i]-site_potential_input[j])<0.01:
+                if np.abs((site_potential_input[i]-site_potential_input[j])/site_potential_input[i])<1.0e-2:
                     count+=1
         if count==6:
             return "A1"
@@ -126,7 +118,7 @@ class FYLCVM:       #base class for FCC
                     position_type_matrix[1][0]=k
                     position_type_matrix[1][1]=l
                     probij=utility.get_cluster_prob(prob,position_type_matrix)
-                    two_body_energy+=probij*np.log(probij)*self.R*T
+                    two_body_energy+=probij*np.log(probij)*T
         #point cluster  
         pointenergy=0
         point_prob=np.zeros((self.component,self.clustersize))
@@ -136,13 +128,13 @@ class FYLCVM:       #base class for FCC
                 position_type_matrix[0][0]=i
                 position_type_matrix[1][0]=j
                 point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
-                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*self.R*T
+                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*T
         #basic cluster start with tetra as default        
         basic_cluster_energy=0                           
         for i in range(self.clustersize):
             for j in range(self.component):
-                basic_cluster_energy+=self.R*T*(point_prob[j][i]*np.log(svm[j][i]))
-        basic_cluster_energy-=self.R*T*np.log(partition)
+                basic_cluster_energy+=T*(point_prob[j][i]*np.log(svm[j][i]))
+        basic_cluster_energy-=T*np.log(partition)
         
         total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy
         entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
@@ -166,7 +158,7 @@ class FYLCVM:       #base class for FCC
                     position_type_matrix[1][0]=k
                     position_type_matrix[1][1]=l
                     probij=utility.get_cluster_prob(prob,position_type_matrix)
-                    two_body_energy+=probij*np.log(probij)*self.R*T
+                    two_body_energy+=probij*np.log(probij)*T
         #point cluster  
         pointenergy=0
         point_prob=np.zeros((self.component,self.clustersize))
@@ -176,13 +168,13 @@ class FYLCVM:       #base class for FCC
                 position_type_matrix[0][0]=i
                 position_type_matrix[1][0]=j
                 point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
-                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*self.R*T
+                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*T
         #basic cluster start with tetra as default        
         basic_cluster_energy=0                           
         for i in range(self.clustersize):
             for j in range(self.component):
-                basic_cluster_energy+=self.R*T*(point_prob[j][i]*np.log(svm[j][i]))
-        basic_cluster_energy-=self.R*T*np.log(partition)
+                basic_cluster_energy+=T*(point_prob[j][i]*np.log(svm[j][i]))
+        basic_cluster_energy-=T*np.log(partition)
         
         total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy
         entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
@@ -204,7 +196,7 @@ class FYLCVM:       #base class for FCC
         if partition<0:
             return 1000.0
 
-        two_body_energy=0
+        two_body_energy=0.0
         for i in range(self.clustersize):                 #4*3*2*2 two body cluster
             for j in range(i+1,self.clustersize):
                 for k,l in itertools.product(range(self.component), repeat=2):     #decorate this line later
@@ -214,9 +206,9 @@ class FYLCVM:       #base class for FCC
                     position_type_matrix[1][0]=k
                     position_type_matrix[1][1]=l
                     probij=utility.get_cluster_prob(prob,position_type_matrix)
-                    two_body_energy+=probij*np.log(probij)*self.R*T
+                    two_body_energy+=probij*np.log(probij)*T
         #point cluster  
-        pointenergy=0
+        pointenergy=0.0
         point_prob=np.zeros((self.component,self.clustersize))
         composition=np.zeros(self.component)
         for i in range(self.clustersize):
@@ -225,18 +217,18 @@ class FYLCVM:       #base class for FCC
                 position_type_matrix[0][0]=i
                 position_type_matrix[1][0]=j
                 point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
-                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*self.R*T
+                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*T
                 composition[j]+=point_prob[j][i]*0.25
         #basic cluster start with tetra as default        
-        basic_cluster_energy=0                           
+        basic_cluster_energy=0.0                          
         for i in range(self.clustersize):
             for j in range(self.component):
                 basic_cluster_energy+=point_prob[j][i]*spm[j][i]
-        basic_cluster_energy-=self.R*T*np.log(partition)
+        basic_cluster_energy-=T*np.log(partition)
         elastic_energy=self.elastic_parameter*composition[0]*composition[1]
         
         total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy-composition[1]*mu+elastic_energy
-        entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
+        entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T     ##check here
         return total_energy
     
     def compute_grand_potential_output(self,site_potential_input,T,mu):    #compute the grand cononical potential
@@ -260,7 +252,7 @@ class FYLCVM:       #base class for FCC
                     position_type_matrix[1][0]=k
                     position_type_matrix[1][1]=l
                     probij=utility.get_cluster_prob(prob,position_type_matrix)
-                    two_body_energy+=probij*np.log(probij)*T*self.R
+                    two_body_energy+=probij*np.log(probij)*T
         #point cluster  
         pointenergy=0
         xb=0
@@ -272,14 +264,14 @@ class FYLCVM:       #base class for FCC
                 position_type_matrix[0][0]=i
                 position_type_matrix[1][0]=j
                 point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
-                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*T*self.R
+                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*T
                 composition[j]+=point_prob[j][i]*0.25
         #basic cluster start with tetra as default        
         basic_cluster_energy=0                           
         for i in range(self.clustersize):
             for j in range(self.component):
                 basic_cluster_energy+=point_prob[j][i]*spm[j][i]
-        basic_cluster_energy-=T*self.R*np.log(partition)
+        basic_cluster_energy-=T*np.log(partition)
 
         E=0
         for i,j,k,l in itertools.product(range(self.component), repeat=4):
@@ -287,7 +279,7 @@ class FYLCVM:       #base class for FCC
         
         total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy-composition[1]*mu
         F=total_energy-composition[1]*mu
-        entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
+        entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T  ##check here
         return total_energy,composition,F,E
     
     def optimize_grand_potential(self,T,mu,method):
@@ -305,15 +297,11 @@ class FYLCVM:       #base class for FCC
         elif method=="basinhopping":
             minimizer_kwargs={"args":(T,mu)}
             result=basinhopping(self.compute_grand_potential,guess,minimizer_kwargs=minimizer_kwargs)
-        elif method=="BFGS":
-            A1_1=np.array([0,0,0,0])
-            A1_2=np.array([10,10,10,10])
-            A1_3=np.array([-10,-10,-10,-10])
-            L12_1=np.array([-3,-3,-3,1.6])
-            L12_2=np.array([3,3,3,-1.6])
-            L10_1=np.array([3.5,3.5,-0.5,-0.5])   
-            L10_2=np.array([-3.5,-3.5,0.5,0.5])   
-            guesslist=(A1_1,A1_2,A1_3,L12_1,L12_2,L10_1,L10_2)
+        elif method=="BFGS":         #default value now
+            A1=np.array([0,0,0,0])
+            L12=np.array([2.25,2.25,2.25,-1.6])
+            L10=np.array([3.5,3.5,-0.25,-0.25])     
+            guesslist=(A1,L12,L10)
             #result=minimize(self.compute_grand_potential,guess,method='BFGS',args=(T,mu))
             result=self.multiBFGS(guesslist,(T,mu))
         return result
@@ -322,7 +310,7 @@ class FYLCVM:       #base class for FCC
         Fmin=1000
         argslist=[args]*len(guesslist)
         inputlist=zip(guesslist,argslist)
-        with Pool(processes=8) as pool:
+        with Pool(processes=4) as pool:
             resultlist=pool.starmap(self.minimizer,inputlist)
             pool.close()
             #pool.join()
@@ -368,7 +356,7 @@ class FYLCVM:       #base class for FCC
         return result
     
     #trace_phase_boundary returns the phase boundary between two specific phases
-    def trace_phase_boundary(self,startingdict):           #always move in the direction of incresing mu
+    def trace_phase_boundary(self,startingdict,steplength=0.05,Tmax=2.5):           #always move in the direction of incresing mu
         lowphase=startingdict['phase'][0]
         highphase=startingdict['phase'][1]
         Tmin=startingdict['T']
@@ -380,14 +368,14 @@ class FYLCVM:       #base class for FCC
         T=Tmin
         count=0
 
-        while (T<=self.Tmax):
-            T=self.dT*count+Tmin
+        while (T<=Tmax):
+            T=steplength*count+Tmin
             mustart+=self.compute_dmu()             #edit after compute_dmu() has value
             result=self.optimize_grand_potential(T,mustart,"BFGS")
             currentphase=self.identify_phase(result.x)
             print("current phase is "+currentphase)
             if currentphase==lowphase:
-                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart,self.dmuprecise,100)
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart,self.potential_precision,100)
                 if muend==1000:
                     print("phase boundary ends")
                     return np.stack((x1mat,x2mat,Tspace)),0
@@ -399,7 +387,7 @@ class FYLCVM:       #base class for FCC
                         "phase":[self.identify_phase(result1.x),self.identify_phase(result2.x)]
                     }
                     self.starting_point_list.append(newstartingdict)
-                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart,self.dmurough,100)
+                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart,0.1,100)
                     newstartingdict={
                         "range":[mustart,muend],
                         "T":T,
@@ -409,7 +397,7 @@ class FYLCVM:       #base class for FCC
                     return np.stack((x1mat,x2mat,Tspace)),2
             elif currentphase==highphase:
                 #search in reverse so that result is also in reverse
-                (muend,mustart,x2,x1,E2,E1,result2,result1)=self.search_phase_boundary(T,mustart,-self.dmuprecise,100)
+                (muend,mustart,x2,x1,E2,E1,result2,result1)=self.search_phase_boundary(T,mustart,-self.potential_precision,100)
                 if muend==1000:
                     print("phase boundary ends")
                     return np.stack((x1mat,x2mat,Tspace)),0
@@ -421,7 +409,7 @@ class FYLCVM:       #base class for FCC
                         "phase":[self.identify_phase(result1.x),self.identify_phase(result2.x)]
                     }
                     self.starting_point_list.append(newstartingdict)
-                    (muend,mustart,x2,x1,E2,E1,result2,result1)=self.search_phase_boundary(T,mustart,-self.dmurough,100)
+                    (muend,mustart,x2,x1,E2,E1,result2,result1)=self.search_phase_boundary(T,mustart,-0.1,100)
                     newstartingdict={
                         "range":[mustart,muend],
                         "T":T,
@@ -431,14 +419,14 @@ class FYLCVM:       #base class for FCC
                     return np.stack((x1mat,x2mat,Tspace)),2
             else:
                 print("new phase detected, start two new search")
-                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart,self.dmurough,100)    #one forward and one reverse
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart,0.1,100)    #one forward and one reverse
                 newstartingdict={
                         "range":[mustart,muend],
                         "T":T,
                         "phase":[self.identify_phase(result1.x),self.identify_phase(result2.x)]
                     }
                 self.starting_point_list.append(newstartingdict)
-                (muend,mustart,x2,x1,E2,E1,result2,result1)=self.search_phase_boundary(T,mustart,-self.dmurough,100)
+                (muend,mustart,x2,x1,E2,E1,result2,result1)=self.search_phase_boundary(T,mustart,-0.1,100)
                 newstartingdict={
                         "range":[mustart,muend],
                         "T":T,
@@ -446,6 +434,8 @@ class FYLCVM:       #base class for FCC
                     }
                 self.starting_point_list.append(newstartingdict)
                 return np.stack((x1mat,x2mat,Tspace)),2
+            #search with higher precision, we can add a loop later
+            #(mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart-0.001,0.001,100)
             print("mustart is "+str(mustart)+" muend is "+str(muend)+" x1 is "+str(x1)+" x2 is "+str(x2)+" at T="+str(T))
             print("sitepot1 is "+str(result1.x)+" sitepot2 is "+str(result2.x))     
             x1mat=np.append(x1mat,x1)
@@ -467,15 +457,18 @@ class FYLCVM:       #base class for FCC
         cdata=np.zeros(steps)
         for i in range(steps):
             muuse=mustart+i*steplength
+            #if muuse<0:
+                #print("can't find phase boundary")
+                #return 1000,1000,cdata[i-1],cdata[i],Esave,E,resultsave,result
             result=self.optimize_grand_potential(T,muuse,"BFGS")
-            print("current phase is "+str(self.identify_phase(result.x))+" at potential "+str(muuse)+" para is "+str(result.x))
             (potential,composition,F,E)=self.compute_grand_potential_output(result.x,T,muuse)
             cdata[i]=composition[0]
             currentphase=self.identify_phase(result.x)
             if i>0:
                 if currentphase!=phasesave:
                     print("phase transition between "+currentphase+" and "+phasesave+"\nmu from "+str(muuse-steplength)+" to "+str(muuse)) 
-                    print("site potential is "+str(result.x)+" and "+str(resultsave.x))             
+                    slope=(muuse-0.5*steplength)/T+(E-Esave)/((cdata[i]-cdata[i-1])*T)
+                    print("slope is "+str(slope))             
                     return muuse-steplength,muuse,cdata[i-1],cdata[i],Esave,E,resultsave,result
             phasesave=currentphase
             Esave=E
@@ -483,11 +476,10 @@ class FYLCVM:       #base class for FCC
         print("can't find phase boundary")
         return 1000,1000,cdata[i-1],cdata[i],Esave,E,resultsave,result
     
-    def scan_phase_boundary(self,T,mustart,muend):        #scan the phase boundary across a wide 
+    def scan_phase_boundary(self,T,mustart,muend,steplength):        #scan the phase boundary across a wide 
         muuse=mustart
         while muuse<muend:                             #continue search with new muuse until boundary is reached
-            (mu1,muuse,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,muuse,self.dmuscan,int((muend-muuse)/self.dmuscan)+1)
-            print("mustart is "+str(mu1)+" muend is "+str(muuse)+" x1 is "+str(x1)+" x2 is "+str(x2))
+            (mu1,muuse,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,muuse,steplength,int((muend-muuse)/steplength)+1)
             if muuse!=1000:
                 startingdict={
                     "range":[mu1,muuse],
@@ -496,9 +488,9 @@ class FYLCVM:       #base class for FCC
                 }
                 self.starting_point_list.append(startingdict)
     
-    def compute_phase_diagram(self,Tstart,mustart,muend):
+    def compute_phase_diagram(self,Tstart,mustart,muend,steplength=0.1):
         #first scan phase boundary starting point
-        self.scan_phase_boundary(Tstart,mustart,muend)
+        self.scan_phase_boundary(Tstart,mustart,muend,steplength)
         print("scan finished, now start search")  
         while len(self.starting_point_list)>0:    #dictionary list of starting points
             (new_phase_boundary,signal)=self.trace_phase_boundary(self.starting_point_list[0])

@@ -39,3 +39,20 @@ for i,j in itertools.product(range(self.component), repeat=2):
             for j in range(self.clustersize):
                 computed_comp[i]+=point_prob[i][j]/self.clustersize
             constraint_function+=penalty_parameter*np.abs((computed_comp[i])-component_comp[i])
+
+    def search_phase_boundary(self,T,mustart,steplength,steps):
+        if steps>1000:            #max of 1000 steps
+            steps=1000
+        cdata=np.zeros(steps)
+        for i in range(steps):
+            muuse=mustart+i*steplength
+            result=self.optimize_grand_potential(T,muuse,"BFGS")
+            (potential,composition,F,E)=self.compute_grand_potential_output(result.x,T,muuse)
+            cdata[i]=composition[0]
+            if i>1:
+                if np.abs(((cdata[i]-cdata[i-1])/(cdata[i-1]-cdata[i-2]))-1)>0.1:
+                    print("slope difference is "+str(np.abs(((cdata[i]-cdata[i-1])/(cdata[i-1]-cdata[i-2]))-1)))              
+                    return muuse-steplength,muuse,cdata[i-1],cdata[i],Esave,E,resultsave,result
+            Esave=E
+            resultsave=result
+    '''
