@@ -2,20 +2,31 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.optimize import brute
 
-x1=np.array([1,2,3,4,5,6])
-x2=np.array([17,8,9,8,8,8])
-x3=np.array([1,2,3,4,7,6])
-
-x=np.stack((x1,x2,x3),axis=0)
-y=np.stack((x2,x3,x1),axis=0)
 lists=[]
-lists.append(x)
-lists.append(y)
-for i in range(len(lists)):
-    listuse=lists[i]
-    plt.plot(listuse[0],listuse[2])
-    plt.plot(listuse[1],listuse[2])
+lists.append(2)
+lists.append(0)
+print(lists)
 
-plt.show()
-print(x)
+'''
+args=(1,10)
+
+argsL12=args+("L12",)
+argsL10=args+("L10",)
+print(argsL12)
+argslist=argsL12*4+argsL10*4
+#argslist2=[argsL10]*4
+#argslist.append(argslist2)
+#.append([argsL10]*4)
+print(argslist)
+
+
+guess_1=np.array([5,-5])
+guess_2=np.array([-5,5])
+L10_1=np.array([15,-15,])   
+L10_2=np.array([-15,15,])
+guesslist=(guess_1,guess_2,L10_1,L10_2) 
+print(guesslist*2)
+uselist=zip(guesslist*2,argslist)
+print(uselist)'''

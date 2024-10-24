@@ -39,7 +39,7 @@ class userinput:             #read in user input
             "-cs":["FCC","string"],
             "-basic":["basic.in","string"],
             "-point":[False],
-            "-vib":[1,"float"],
+            "-vib":[1.0,"float"],
             "-e":[0,"float"],
             "-h":[False],
             "-disp":[False],
@@ -97,12 +97,12 @@ def read_control_variable(controlfilename,unit):
             return control_dictionary
         elif unit=="kj":
             control_dictionary={              #adjust later for real unit system
-                "dT":10.0,             
-                "dmurough":0.1,
-                "dmuprecise":0.02,
+                "dT":25.0,             
+                "dmurough":0.2,
+                "dmuprecise":0.05,
                 "dmuscan":0.2,
                 "Tmax":1000.0,
-                "Tstart":500.0,           #change to 300 later
+                "Tstart":700.0,           #change to 300 later
                 "R":8.3144621e-3
             }
             return control_dictionary
@@ -110,7 +110,18 @@ def read_control_variable(controlfilename,unit):
 def displayhelptext():
     print("Hello world, this is help information")
     sys.exit()
-    
+
+def map_variable_to_phase(initialvalue,phase,n):
+    sitepotential_input=np.zeros(n)
+    if phase=="L12":
+        sitepotential_input[0]=sitepotential_input[1]=sitepotential_input[2]=initialvalue[0]
+        sitepotential_input[3]=initialvalue[1]
+    elif phase=="L10":
+        sitepotential_input[0]=sitepotential_input[1]=initialvalue[0]
+        sitepotential_input[2]=sitepotential_input[3]=initialvalue[1]        
+    return sitepotential_input
+
+
 if __name__ == '__main__':
     arr = np.ones([2,2,2,2])
     arr = arr/np.sum(arr)

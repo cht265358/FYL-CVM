@@ -5,11 +5,13 @@ import os
 import sys
 import itertools
 import utility
+import plotter
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from scipy.optimize import brute
 from scipy.optimize import basinhopping
 from multiprocessing import Pool
+from matplotlib import cm
 #svm stands for site_variable_matrix
 
 class FYLCVM:       #base class for FCC
@@ -23,10 +25,12 @@ class FYLCVM:       #base class for FCC
         self.shape=[self.component]*self.clustersize    #ignore using basic cluster with different size first
         self.map_basic_cluster_energy(E)
         self.vibrationalenergy=np.zeros(self.shape)
-        self.vibration_parameter=vibration_parameter             #vibration parameter with default of 1
+        self.vib_para=vibration_parameter             #vibration parameter with default of 1
         self.elastic_parameter=elastic_para
         self.starting_point_list=[]
         self.phase_boundary_list=[]
+        self.mu_Tlist=[]
+        self.phb_status_list=[]
         self.R=control_dict['R']
         self.dmurough=control_dict['dmurough']
         self.dmuprecise=control_dict['dmuprecise']
@@ -46,8 +50,8 @@ class FYLCVM:       #base class for FCC
         for i,j,k,l in itertools.product(range(self.component), repeat=4):       #eith use an elegant way or write everything without loop at all
             self.vibrationalenergy[i][j][k][l]=Fmat[i+k+j+l]'''
     
-    def map_vibrational_energy(self,vibpara,T):        #Assume symmetry wAA=wBB
-        Fmat=[0,-0.75*T*self.R*np.log(vibpara),-T*self.R*np.log(vibpara),-0.75*T*self.R*np.log(vibpara),0]
+    def map_vibrational_energy(self,T):        #Assume symmetry wAA=wBB
+        Fmat=[0,1.5*T*self.R*np.log(self.vib_para),2*T*self.R*np.log(self.vib_para),1.5*T*self.R*np.log(self.vib_para),0]
         for i,j,k,l in itertools.product(range(self.component), repeat=4):       #eith use an elegant way or write everything without loop at all
             self.vibrationalenergy[i][j][k][l]=Fmat[i+k+j+l]
 
@@ -114,6 +118,49 @@ class FYLCVM:       #base class for FCC
         prob=self.compute_basic_cluster_prob(partition,svm,T,self.vibrationalenergy)
 
         if partition<0:
+            #print("negative partition function")
+            return 1000.0
+        #two body cluster
+        two_body_energy=0
+        for i in range(self.clustersize):                 #4*3*2*2 two body cluster
+            for j in range(i+1,self.clustersize):
+                for k,l in itertools.product(range(self.component), repeat=2):     #decorate this line later
+                    position_type_matrix=np.zeros((2,2))
+                    position_type_matrix[0][0]=i
+                    position_type_matrix[0][1]=j
+                    position_type_matrix[1][0]=k
+                    position_type_matrix[1][1]=l
+                    probij=utility.get_cluster_prob(prob,position_type_matrix)
+                    two_body_energy+=probij*np.log(probij)*self.R*T
+        #point cluster  
+        pointenergy=0
+        point_prob=np.zeros((self.component,self.clustersize))
+        for i in range(self.clustersize):
+            for j in range(self.component):
+                position_type_matrix=np.zeros((2,1))
+                position_type_matrix[0][0]=i
+                position_type_matrix[1][0]=j
+                point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
+                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*self.R*T
+        #basic cluster start with tetra as default        
+        basic_cluster_energy=0                           
+        for i in range(self.clustersize):
+            for j in range(self.component):
+                basic_cluster_energy+=self.R*T*(point_prob[j][i]*np.log(svm[j][i]))
+        basic_cluster_energy-=self.R*T*np.log(partition)
+        
+        total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy
+        entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
+        return total_energy
+
+    def compute_total_energy_brute(self,site_variable_input,T,component_comp):    #reduce computational cost for brute method using special function
+        site_variable_input=np.append(site_variable_input,site_variable_input[0])
+        svm=self.compute_site_variable_matrix(site_variable_input,component_comp,T) 
+        partition=self.compute_partition_function(svm,T,self.vibrationalenergy)
+        prob=self.compute_basic_cluster_prob(partition,svm,T,self.vibrationalenergy)
+
+        if partition<0:
+            #print("negative partition function")
             return 1000.0
         #two body cluster
         two_body_energy=0
@@ -194,7 +241,7 @@ class FYLCVM:       #base class for FCC
         return total_energy,entropy,mu/partition
 
     def compute_grand_potential(self,site_potential_input,T,mu):    #compute the grand cononical potential
-        #self.map_vibrational_energy(T)
+        self.map_vibrational_energy(T)
         spm=np.zeros((self.component,self.clustersize))             #spm is site potential matrix
         for i in range(self.clustersize):
             spm[1][i]=site_potential_input[i]
@@ -240,7 +287,7 @@ class FYLCVM:       #base class for FCC
         return total_energy
     
     def compute_grand_potential_output(self,site_potential_input,T,mu):    #compute the grand cononical potential
-        #self.map_vibrational_energy(T)
+        self.map_vibrational_energy(T)
         spm=np.zeros((self.component,self.clustersize))             #spm is site potential matrix
         for i in range(self.clustersize):
             spm[1][i]=site_potential_input[i]
@@ -307,65 +354,184 @@ class FYLCVM:       #base class for FCC
             result=basinhopping(self.compute_grand_potential,guess,minimizer_kwargs=minimizer_kwargs)
         elif method=="BFGS":
             A1_1=np.array([0,0,0,0])
-            A1_2=np.array([10,10,10,10])
-            A1_3=np.array([-10,-10,-10,-10])
-            L12_1=np.array([-3,-3,-3,1.6])
+            A1_2=np.array([20,20,20,20])
+            A1_3=np.array([-20,-20,-20,-20])
+            L12_1=np.array([-10,-10,-10,10])
             L12_2=np.array([3,3,3,-1.6])
-            L10_1=np.array([3.5,3.5,-0.5,-0.5])   
-            L10_2=np.array([-3.5,-3.5,0.5,0.5])   
-            guesslist=(A1_1,A1_2,A1_3,L12_1,L12_2,L10_1,L10_2)
+            L12_3=np.array([10,10,10,-10])
+            L10_1=np.array([15,15,-15,-15])   
+            L10_2=np.array([-15,-15,15,15])  
+            L10_2=np.array([5,5,-5,-5])
+            L10_2=np.array([-5,-5,5,5]) 
+            guesslist=(A1_1,A1_2,A1_3,L12_1,L12_2,L12_3,L10_1,L10_2)
             #result=minimize(self.compute_grand_potential,guess,method='BFGS',args=(T,mu))
             result=self.multiBFGS(guesslist,(T,mu))
+        elif method=="BFGS_v2":
+            '''guess_1=np.array([5,-5])
+            guess_2=np.array([-5,5])
+            L10_1=np.array([15,-15,])   
+            L10_2=np.array([-15,15,])'''
+            guess_1=np.array([2,-1])
+            guess_2=np.array([-1,2])
+            L10_1=np.array([5,-5,])   
+            L10_2=np.array([-5,5,])
+            guesslist=(guess_1,guess_2,L10_1,L10_2)  
+            result,phase=self.multiBFGS_v2(guesslist,(T,mu))
+            result.x=utility.map_variable_to_phase(result.x,phase,self.clustersize)         #change later if everything works perfectly, return result.x with size 4
+            #print("at potential mu="+str(mu)+" best phase is "+self.identify_phase(result.x))
         return result
     
-    def multiBFGS(self,guesslist,args):             #input two tuple
+    def plot_potential_surface(self,T,mu,phase):
+        print("plot the potential surface based on brute force plot result")
+        if phase=="A1":
+            boundary=[slice(-10,10,0.02)]
+        else:
+            boundary=(slice(-50,50,0.2),slice(-50,50,0.2))
+        result=brute(self.brute_minimizer,boundary,args=(T,mu,phase),workers=-1,full_output=True,finish=None)
+        print("minimal is at "+str(result[0])+" minimal value is "+str(result[1]))
+        if phase=="A1":
+            fig, ax = plt.subplots(subplot_kw={})
+            ax.plot(result[2],result[3])
+        else:
+            fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+            surf = ax.plot_surface((result[2])[0],(result[2])[1],result[3],linewidth=0, cmap=cm.coolwarm,antialiased=False)
+        ax.set_title("potential surface with mu="+str(mu)+" at T="+str(T)+" for phase "+phase)
+        fig.savefig("mu="+str(mu)+"_"+phase)
+    
+    def brute_minimizer(self,input_variable,T,mu,phase):
+        site_potential_input=np.zeros(self.clustersize)
+        if phase=="A1":
+            for i in range(self.clustersize):site_potential_input[i]=input_variable[0] 
+        elif phase=="L12":
+            site_potential_input[0]=site_potential_input[1]=site_potential_input[2]=input_variable[0]
+            site_potential_input[3]=input_variable[1]
+        elif phase=="L10":
+            site_potential_input[0]=site_potential_input[1]=input_variable[0]
+            site_potential_input[2]=site_potential_input[3]=input_variable[1]
+        return self.compute_grand_potential(site_potential_input,T,mu)
+    
+    def multiBFGS(self,guesslist,args,space="mu"):             #input two tuple
         Fmin=1000
         argslist=[args]*len(guesslist)
         inputlist=zip(guesslist,argslist)
-        with Pool(processes=8) as pool:
-            resultlist=pool.starmap(self.minimizer,inputlist)
-            pool.close()
-            #pool.join()
+        if space=="mu":
+            with Pool(processes=8) as pool:
+                resultlist=pool.starmap(self.minimizermu,inputlist)
+                pool.close()
+        else:
+            with Pool(processes=8) as pool:
+                resultlist=pool.starmap(self.minimizerx,inputlist)
+                pool.close()
 
         for result in resultlist:
+            #print("free energy is "+str(result.fun)+" site variable is "+str(result.x))
             if result.fun<Fmin:
-                Fmin=result.fun
-                bestresult=result
+                if space!="mu" or self.identify_phase(result.x)!="L12+L10":                   #ignore L12+L10 for now
+                    Fmin=result.fun
+                    bestresult=result
         return bestresult
     
-    def minimizer(self,initialvalue,args,method='BFGS'):      #use a minimizer that can be called by pool.starmap
+    def multiBFGS_v2(self,guesslist,args):             #input two tuple
+        Fmin=10
+        argsL12=args+("L12",)
+        argsL10=args+("L10",)
+        argslist=(argsL12,argsL12,argsL12,argsL12,argsL10,argsL10,argsL10,argsL10)
+        #print(argslist)
+        #longguesslist=guesslist*2
+        #print(longguesslist)
+        inputlist=zip(guesslist*2,argslist)
+
+        with Pool(processes=8) as pool:
+            resultlist=pool.starmap(self.minimizerv2,inputlist)
+            pool.close()
+
+        for result in resultlist:
+            #print("phase is "+result[1])
+            if result[0].fun<Fmin:
+                Fmin=result[0].fun
+                bestresult=result[0]
+                phase=result[1]
+        
+        return bestresult,phase
+    
+    def minimizermu(self,initialvalue,args,method='BFGS'):      #use a minimizer that can be called by pool.starmap
         result=minimize(self.compute_grand_potential,initialvalue,method=method,args=args)
         return result
     
-    '''
-    def multiBFGS(self,guesslist,args):             #input two tuple
-        Fmin=1000
-        for guess in guesslist:
-            result=minimize(self.compute_grand_potential,guess,method='BFGS',args=args)
-            if result.fun<Fmin:
-                Fmin=result.fun
-                bestresult=result
-        return bestresult'''
+    def minimizerv2_L12(self,initialvalue,args,method='BFGS'):      #reduce number of variables
+        result=minimize(self.potential_computerv2_L12,initialvalue,method=method,args=args)
+        return result
+
+    def minimizerv2(self,initialvalue,args,method='BFGS'):      #return phase
+        result=minimize(self.potential_computerv2,initialvalue,method=method,args=args)
+        return result,args[2]
+    
+    def minimizerv2_L10(self,initialvalue,args,method='BFGS'):      #reduce number of variables
+        print("check if minimizer is runned")
+        result=minimize(self.potential_computerv2_L10,initialvalue,method=method,args=args)
+        return result
+
+    def potential_computerv2(self,initialvalue,T,mu,phase):
+        sitepotential_input=np.zeros(self.clustersize)
+        if phase=="L12":
+            sitepotential_input[0]=sitepotential_input[1]=sitepotential_input[2]=initialvalue[0]
+            sitepotential_input[3]=initialvalue[1]
+        elif phase=="L10":
+            sitepotential_input[0]=sitepotential_input[1]=initialvalue[0]
+            sitepotential_input[2]=sitepotential_input[3]=initialvalue[1]
+        return self.compute_grand_potential(sitepotential_input,T,mu)
+        
+    def potential_computerv2_L12(self,initialvalue,T,mu):
+        sitepotential_input=np.zeros(self.clustersize)
+        sitepotential_input[0]=sitepotential_input[1]=sitepotential_input[2]=initialvalue[0]
+        sitepotential_input[3]=initialvalue[1]
+        return self.compute_grand_potential(sitepotential_input,T,mu)
+
+    def potential_computerv2_L10(self,initialvalue,T,mu):    
+        sitepotential_input=np.zeros(self.clustersize)
+        sitepotential_input[0]=sitepotential_input[1]=initialvalue[0]
+        sitepotential_input[2]=sitepotential_input[3]=initialvalue[1]
+        return self.compute_grand_potential(sitepotential_input,T,mu)
+
+    def minimizerx(self,initialvalue,args,method='BFGS'):      #use a minimizer that can be called by pool.starmap
+        result=minimize(self.compute_total_energy,initialvalue,method=method,args=args)
+        return result   
 
     def optimize_free_energy(self,T,component_comp,method):         #main optimization function, optimize site variables at given T and composition
         guess=np.array([2.26,2.26,-1.84])
         #initial_guess=np.ones((self.clustersize-1)*(self.component-1))
         if method=="NM":
-            initial_guess2=np.array([[3,3,-1.5],[2.5,2.5,-2],[2.5,2.5,-1.5],[2.64,2.64,-1.897]])
+            initial_guess2=np.array([[5,5,-2],[5,5,-1],[4,4,0],[4,4,-1]])
             options={
                 'initial_simplex':initial_guess2
             }
-            positive=((-20,20),(-20,20),(-20,20))
+            positive=((-10,10),(-10,10),(-10,10))
             #result=minimize(CVM.compute_total_energy,guess,method='Nelder-Mead',args=(T,component_comp),bounds=positive,tol=1.0e-6)
             result=minimize(self.compute_total_energy,guess,method='Nelder-Mead',options=options,args=(T,component_comp),bounds=positive,tol=1.0e-6)
         elif method=="basinhopping":
             minimizer_kwargs={"args":(T,component_comp)}
             result=basinhopping(self.compute_total_energy,guess,minimizer_kwargs=minimizer_kwargs)
         elif method=="brute":
-            boundary=(slice(1.5,2.5,0.05),slice(1.5,2.5,0.05),slice(1.5,2.5,0.05))
-            result=brute(self.compute_total_energy,boundary,args=(T,component_comp),workers=-1,full_output=False)
+            boundary=(slice(-10,10,0.02),slice(-10,10,0.02))
+            result=brute(self.compute_total_energy_brute,boundary,args=(T,component_comp),workers=-1,full_output=False)
+        elif method=="BFGS":
+            A1_1=np.array([2.5,2.5,2.5])
+            A1_2=np.array([0,0,0])
+            L12_1=np.array([3.2,3.2,-1])
+            L10_1=np.array([3.5,3.5,-0.5])   
+            guesslist=(A1_1,A1_2,L12_1,L10_1)
+            #result=minimize(self.compute_grand_potential,guess,method='BFGS',args=(T,mu))
+            result=self.multiBFGS(guesslist,(T,component_comp),"x")
 
         return result
+    
+    def find_phase_boundary(self,Tstart,Tstop,composition,method="BFGS"):
+        T=Tstart
+        count=0
+        while T<Tstop:
+            result=self.optimize_free_energy(T,composition,method)
+            self.output_optimization(result,T,composition,method)
+            T+=self.dT
     
     #trace_phase_boundary returns the phase boundary between two specific phases
     def trace_phase_boundary(self,startingdict):           #always move in the direction of incresing mu
@@ -377,20 +543,22 @@ class FYLCVM:       #base class for FCC
         x1mat=np.array([])
         x2mat=np.array([])
         Tspace=np.array([])               #flexable value
+        muspace=np.array([])  
         T=Tmin
         count=0
 
         while (T<=self.Tmax):
             T=self.dT*count+Tmin
             mustart+=self.compute_dmu()             #edit after compute_dmu() has value
-            result=self.optimize_grand_potential(T,mustart,"BFGS")
+            result=self.optimize_grand_potential(T,mustart,"BFGS_v2")
             currentphase=self.identify_phase(result.x)
             print("current phase is "+currentphase)
             if currentphase==lowphase:
-                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart,self.dmuprecise,100)
+                print("lowphase")
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart,self.dmuprecise,150)
                 if muend==1000:
                     print("phase boundary ends")
-                    return np.stack((x1mat,x2mat,Tspace)),0
+                    return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),0
                 if self.identify_phase(result2.x)!=highphase:
                     print("new phase detected, follow two new boundary")
                     newstartingdict={
@@ -399,20 +567,25 @@ class FYLCVM:       #base class for FCC
                         "phase":[self.identify_phase(result1.x),self.identify_phase(result2.x)]
                     }
                     self.starting_point_list.append(newstartingdict)
-                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart,self.dmurough,100)
+                    print("new starting dict is")
+                    print(newstartingdict)
+                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,muend,self.dmurough,100)
                     newstartingdict={
                         "range":[mustart,muend],
                         "T":T,
                         "phase":[self.identify_phase(result1.x),self.identify_phase(result2.x)]
                     }
+                    print("new starting dict is")
+                    print(newstartingdict)
                     self.starting_point_list.append(newstartingdict)
-                    return np.stack((x1mat,x2mat,Tspace)),2
+                    return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),2
             elif currentphase==highphase:
+                print("highphase")
                 #search in reverse so that result is also in reverse
-                (muend,mustart,x2,x1,E2,E1,result2,result1)=self.search_phase_boundary(T,mustart,-self.dmuprecise,100)
+                (muend,mustart,x2,x1,E2,E1,result2,result1)=self.search_phase_boundary(T,mustart,-self.dmuprecise,150)
                 if muend==1000:
                     print("phase boundary ends")
-                    return np.stack((x1mat,x2mat,Tspace)),0
+                    return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),0
                 if self.identify_phase(result1.x)!=lowphase:
                     print("new phase detected, follow two new boundary")
                     newstartingdict={
@@ -420,6 +593,8 @@ class FYLCVM:       #base class for FCC
                         "T":T,
                         "phase":[self.identify_phase(result1.x),self.identify_phase(result2.x)]
                     }
+                    print("new starting dict is")
+                    print(newstartingdict)
                     self.starting_point_list.append(newstartingdict)
                     (muend,mustart,x2,x1,E2,E1,result2,result1)=self.search_phase_boundary(T,mustart,-self.dmurough,100)
                     newstartingdict={
@@ -427,8 +602,10 @@ class FYLCVM:       #base class for FCC
                         "T":T,
                         "phase":[self.identify_phase(result1.x),self.identify_phase(result2.x)]
                     }
+                    print("new starting dict is")
+                    print(newstartingdict)
                     self.starting_point_list.append(newstartingdict)
-                    return np.stack((x1mat,x2mat,Tspace)),2
+                    return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),2
             else:
                 print("new phase detected, start two new search")
                 (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart,self.dmurough,100)    #one forward and one reverse
@@ -445,18 +622,16 @@ class FYLCVM:       #base class for FCC
                         "phase":[self.identify_phase(result1.x),self.identify_phase(result2.x)]
                     }
                 self.starting_point_list.append(newstartingdict)
-                return np.stack((x1mat,x2mat,Tspace)),2
+                return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),2
             print("mustart is "+str(mustart)+" muend is "+str(muend)+" x1 is "+str(x1)+" x2 is "+str(x2)+" at T="+str(T))
             print("sitepot1 is "+str(result1.x)+" sitepot2 is "+str(result2.x))     
             x1mat=np.append(x1mat,x1)
             x2mat=np.append(x2mat,x2)
             Tspace=np.append(Tspace,T)
+            muspace=np.append(muspace,0.5*(mustart+muend))
             count+=1
         
-        return np.append(np.append(x1mat,x2mat,axis=0),Tspace,axis=0),1
-        #plt.plot(x1mat,Tspace)
-        #plt.plot(x2mat,Tspace)
-        #plt.show()   
+        return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),1
 
     def compute_dmu(self):
         return 0
@@ -467,8 +642,8 @@ class FYLCVM:       #base class for FCC
         cdata=np.zeros(steps)
         for i in range(steps):
             muuse=mustart+i*steplength
-            result=self.optimize_grand_potential(T,muuse,"BFGS")
-            print("current phase is "+str(self.identify_phase(result.x))+" at potential "+str(muuse)+" para is "+str(result.x))
+            result=self.optimize_grand_potential(T,muuse,"BFGS_v2")  
+            #print("current phase is "+str(self.identify_phase(result.x))+" at potential "+str(muuse)+" para is "+str(result.x))
             (potential,composition,F,E)=self.compute_grand_potential_output(result.x,T,muuse)
             cdata[i]=composition[0]
             currentphase=self.identify_phase(result.x)
@@ -501,26 +676,30 @@ class FYLCVM:       #base class for FCC
         self.scan_phase_boundary(Tstart,mustart,muend)
         print("scan finished, now start search")  
         while len(self.starting_point_list)>0:    #dictionary list of starting points
-            (new_phase_boundary,signal)=self.trace_phase_boundary(self.starting_point_list[0])
+            (new_phase_boundary,mu_T,signal)=self.trace_phase_boundary(self.starting_point_list[0])
             print("search finished, will move on to next starting point possible")
             self.phase_boundary_list.append(new_phase_boundary)
+            self.mu_Tlist.append(mu_T)
+            self.phb_status_list.append(signal)
             self.starting_point_list.pop(0)       #after each run remove the starting point used
-    
-    def plot_phase_diagram0(self,filename):
-        for i in range(len(self.phase_boundary_list)):
-            listuse=self.phase_boundary_list[i]
-            plt.plot(listuse[0],listuse[2])
-            plt.plot(listuse[1],listuse[2])
-        plt.savefig(filename)
+        f=open("phase_boundary_list.txt","w")
+        print(self.phase_boundary_list,file=f)
+        f.close()
+        g=open("muT_list.txt","w")
+        print(self.mu_Tlist,file=g)
+        g.close()
+        #plotter.plot_phase_diagram(self.phase_boundary_list,self.phb_status_list,self.dT)
 
-    def output_optimization(self,result,T,component_comp):
-        brute=0
-        if brute:
+    def output_optimization(self,result,T,component_comp,method):
+        if method=="brute":
+            result=np.append(result,result[0])
             svm=self.compute_site_variable_matrix(result,component_comp,T) 
-            print(" site variable is "+str(svm[1])+" composition is "+str(component_comp))
+            print(" site variable is "+str(svm[1])+" composition is "+str(component_comp)+" free energy is "+str(self.compute_total_energy_brute(result,T,component_comp))+" at T="+str(T))
         else:
             svm=self.compute_site_variable_matrix(result.x,component_comp,T) 
             print("free energy is "+str(result.fun)+" site variable is "+str(svm[1])+" composition is "+str(component_comp))
+        print("the phase is "+self.identify_phase(svm[1]))
+        return self.identify_phase(svm[1])
 
     def output_potential(self,result,T,component_comp):
         svm=np.zeros(self.clustersize)
