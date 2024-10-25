@@ -688,7 +688,15 @@ class FYLCVM:       #base class for FCC
         g=open("muT_list.txt","w")
         print(self.mu_Tlist,file=g)
         g.close()
+        self.plot_phase_diagram0("pdraw.png")
         #plotter.plot_phase_diagram(self.phase_boundary_list,self.phb_status_list,self.dT)
+
+    def plot_phase_diagram0(self,filename):
+        for i in range(len(self.phase_boundary_list)):
+            listuse=self.phase_boundary_list[i]
+            plt.plot(listuse[0],listuse[2])
+            plt.plot(listuse[1],listuse[2])
+        plt.savefig(filename)
 
     def output_optimization(self,result,T,component_comp,method):
         if method=="brute":

@@ -222,3 +222,56 @@ if __name__ == '__main__':
         6.40000000e+02, 6.45000000e+02, 6.50000000e+02, 6.55000000e+02,
         6.60000000e+02, 6.65000000e+02, 6.70000000e+02, 6.75000000e+02,
         6.80000000e+02, 6.85000000e+02, 6.90000000e+02]])]
+
+or i in range(listlen):
+        for j in range(i+1,listlen):
+            if signal_list[i]!=4 and signal_list[j]!=4:
+                if phase_boundary_list[i][2][-1]==phase_boundary_list[j][2][-1]:    #same end point
+                    #if phase_boundary_list[i][0][0]>
+                    phase_boundary_list[j][[0,1]]=phase_boundary_list[j][[1,0]]
+                    list_use=np.append(phase_boundary_list[i],phase_boundary_list[j],axis=1)
+                    if list_use[0][0]>list_use[0][1]:
+                        list_use=np.fliplr(list_use) 
+                    phb_right=UnivariateSpline(list_use[0],list_use[2],s=0.5)
+                    phb_left=UnivariateSpline(list_use[1],list_use[2],s=0.5)
+                    x1space=np.linspace(list_use[0][0],list_use[0][-1],1000)
+                    x2space=np.linspace(list_use[1][0],list_use[1][-1],1000)
+                    plt.plot(x1space,phb_right(x1space),'r')
+                    plt.plot(x2space,phb_left(x2space),'r')
+                    signal_list[i]=signal_list[j]=4
+                    #if phase_boundary_list[i][1][-1]>phase_boundary_list[j][0][-1]:
+                    #avg=0.5*(phase_boundary_list[i][1][-1]+phase_boundary_list[j][0][-1])
+                    #phase_boundary_list[i]=np.append(phase_boundary_list[i],np.array([[avg],[avg],[phase_boundary_list[i][2][-1]+0.5*dT]]),axis=1)
+                    #phase_boundary_list[i]=np.append(phase_boundary_list[i],phase_boundary_list[j],axis=1)
+                    #phase_boundary_list[j]=np.append(phase_boundary_list[j],np.array([[avg],[avg],[phase_boundary_list[i][2][-1]]]),axis=1)
+    '''
+    print(phase_boundary_list)
+    for i in range(listlen):
+        list_use=phase_boundary_list[i]
+        if len(list_use[0])>3:
+            phb_right=UnivariateSpline(list_use[0],list_use[2],s=0.5)
+            phb_left=UnivariateSpline(list_use[1],list_use[2],s=0.5)
+            x1space=np.linspace(list_use[0][0],list_use[0][-1],1000)
+            x2space=np.linspace(list_use[0][0],list_use[0][-1],1000)
+            plt.plot(x1space,phb_right(x1space),'r')
+            plt.plot(x2space,phb_left(x2space),'r')
+        else:
+            plt.plot(list_use[0],list_use[2],'r')
+            plt.plot(list_use[1],list_use[2],'r')
+    plt.show()
+    '''
+
+testinput=[np.array([[-53.925, -53.075, -52.125, -51.075, -49.775, -48.125, -45.475],
+       [700.   , 710.   , 720.   , 730.   , 740.   , 750.   , 760.   ]]), np.array([[-28.625, -29.975, -31.375, -32.925, -34.625, -36.725, -39.775],
+       [700.   , 710.   , 720.   , 730.   , 740.   , 750.   , 760.   ]])]
+    testinputx=[np.array([[7.92327224e-01, 7.87730420e-01, 7.82644248e-01, 7.77074867e-01,
+        7.70269436e-01, 7.61737463e-01, 7.48255546e-01],
+       [7.65459901e-01, 7.63260499e-01, 7.60816139e-01, 7.58133191e-01,
+        7.54747779e-01, 7.50343537e-01, 7.42817140e-01],
+       [7.00000000e+02, 7.10000000e+02, 7.20000000e+02, 7.30000000e+02,
+        7.40000000e+02, 7.50000000e+02, 7.60000000e+02]]), np.array([[6.73028602e-01, 6.80105253e-01, 6.87207277e-01, 6.94826942e-01,
+        7.02750338e-01, 7.11963980e-01, 7.24047493e-01],
+       [6.65327222e-01, 6.71902798e-01, 6.78710927e-01, 6.86245660e-01,
+        6.94509752e-01, 7.04740648e-01, 7.19668575e-01],
+       [7.00000000e+02, 7.10000000e+02, 7.20000000e+02, 7.30000000e+02,
+        7.40000000e+02, 7.50000000e+02, 7.60000000e+02]])]

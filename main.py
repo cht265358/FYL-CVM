@@ -14,7 +14,7 @@ if __name__ == '__main__':
     start_time = time.time()
     #argv=["-t","-vib=0.95"]
     #argv=["-t","-unit=kj"]
-    argv=["-t","-unit=kj"]
+    argv=["-t"]
     #inputs=utility.userinput(sys.argv)              
     inputs=utility.userinput(argv)
     inputs.read_input()
@@ -48,7 +48,7 @@ if __name__ == '__main__':
         (newphb,starting_pointnumber)=myCVM.trace_phase_boundary(dictin)
         print(myCVM.starting_point_list)
     elif task=="compute":
-        myCVM.compute_phase_diagram(control_dict['Tstart'],-75,75)
+        myCVM.compute_phase_diagram(control_dict['Tstart'],0,30)
         print(myCVM.phase_boundary_list)
         #myCVM.plot_phase_diagram0(output_name)
     elif task=="scan":
