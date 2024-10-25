@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import UnivariateSpline
 from scipy.interpolate import CubicSpline
 from scipy.optimize import minimize
+from scipy.interpolate import splrep
 
 def plot_phase_diagram(phase_boundary_list,mu_list,signal_list,dT,Tstart,data_type="phaseboundary"):
     print("plot phase diagram using data obtained from FYL-CVM")
@@ -163,7 +164,31 @@ def find_intersect(mu_t1,mu_t2):
             Tbest=0.5*(fit1(i)+fit2(i))
     return mubest,Tbest
     
+def plot_phase_boundary(xt):
+    endslope=10
+    w=np.ones(len(xt[0]))
+    w[-1]=10
+    if xt[0][-1]<xt[0][-2]:
+        endslope=-10
+    phb=UnivariateSpline(xt[1],xt[0],w=w)
+    Tspace=np.linspace(xt[1][0],xt[1][-1],1000,endpoint=True)
+    plt.plot(phb(Tspace),Tspace,'r')
+    plt.show()
 
+def plot_phase_boundary_v1(xt):
+    sig=check_positive_v1(xt[0])
+    if sig==-1:
+        phb=CubicSpline(1-xt[0],xt[1],bc_type=((2, 0.0), (1, 0.0)))
+        xspace=np.linspace(xt[0][0],xt[0][-1],1000,endpoint=True)
+        plt.plot(xspace,phb(1-xspace),'r')
+        plt.show()
+    if sig==0:                     #plot in yx space
+        w=np.ones(len(xt[0]))
+        w[-1]=10
+        phb=UnivariateSpline(xt[1],xt[0],w=w)
+
+def check_positive_v1(x):
+    return -1
 
 def check_positive(x):
     flip=1
@@ -173,7 +198,13 @@ def check_positive(x):
     return x,flip
 
 if __name__ == '__main__':
-
+    xt=np.array([[0.39948941, 0.37929707, 0.36451222, 0.3516783 , 0.33922487,
+        0.3265239 , 0.31202252, 0.29356041,0.270],
+       [1.65      , 1.7       , 1.75      , 1.8       , 1.85      ,
+        1.9       , 1.95      , 2.    , 2.02   ]])
+    #phb=splrep(xt[0],xt[1])
+    plot_phase_boundary_v1(xt)
+    '''
     phb_list=[np.array([[0.40910661, 0.40863414, 0.40868302, 0.40854587, 0.4088605 ,
         0.40833552, 0.40883314, 0.40907053, 0.41022444, 0.41102828,
         0.41323821, 0.41620877, 0.42055948],
@@ -220,4 +251,4 @@ if __name__ == '__main__':
        [1.65, 1.7 , 1.75, 1.8 , 1.85, 1.9 ]])]
     signallist=[2,0,0,0]
     #solve_invariant(testinputx[0],testinputx[1],testinput[0],testinput[1])
-    plot_phase_diagram(phb_list,muTlist,signallist,0.05,1)
+    plot_phase_diagram(phb_list,muTlist,signallist,0.05,1)'''
