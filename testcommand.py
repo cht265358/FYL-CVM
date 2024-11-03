@@ -3,11 +3,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import brute
+import ast
 
-lists=[]
-lists.append(2)
-lists.append(0)
-print(lists)
+# animal.py
+
+data=0
+
+if data!=False:
+    print("erjlk")
+
 
 '''
 args=(1,10)

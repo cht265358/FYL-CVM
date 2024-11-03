@@ -33,6 +33,7 @@ class userinput:             #read in user input
     def __init__(self,usrinput):
         inputdictionary={
             "-t":[False],
+            "-shell":[False],
             "main.py":[True],
             "-c":[2,"int"],
             "-maxsize":[4,"int"],
@@ -50,6 +51,22 @@ class userinput:             #read in user input
         }
         self.inputdictionary=inputdictionary
         self.usrinput=usrinput
+        self.read_input()
+    
+    def assign_input(self):
+        self.testmode=self.inputdictionary['-t']
+        self.shellmode=self.inputdictionary['-shell']
+        self.number_of_component=self.inputdictionary['-c'][0]
+        self.max_clustersize=self.inputdictionary['-maxsize'][0]
+        self.crystal_system=self.inputdictionary['-cs'][0]
+        self.basic_cluster_energy,self.local_energy_parameter=read_cluster_energy(self.inputdictionary['-basic'][0])
+        self.vibration_parameter=self.inputdictionary['-vib'][0]
+        self.displayhelptext=self.inputdictionary['-h']
+        self.elastic_parameter=self.inputdictionary['-e'][0]
+        self.phasediagram_name=self.inputdictionary['-name'][0]
+        #potential_precision=inputs.inputdictionary['-dmu'][0]
+        self.unituse=self.inputdictionary['-unit'][0]
+        self.controlfilename=self.inputdictionary['-control'][0]
     
     def read_input(self):
         for keyword in self.usrinput:
@@ -64,6 +81,14 @@ class userinput:             #read in user input
                     self.inputdictionary.update({inputtuple[0]:[inputtuple[1],"string"]})
             else:
                 self.inputdictionary.update({keyword:True})
+        self.assign_input()
+
+def read_cluster_energy(filename):
+    txt=np.loadtxt(filename)
+    if txt.ndim==1:
+        return txt,np.ones(np.shape(txt)[0])
+    else:
+        return txt[0],txt[1]
 
 def detectequal(astring):
     for element in astring:
@@ -98,11 +123,11 @@ def read_control_variable(controlfilename,unit):
         elif unit=="kj":
             control_dictionary={              #adjust later for real unit system
                 "dT":25.0,             
-                "dmurough":0.2,
+                "dmurough":0.5,
                 "dmuprecise":0.05,
                 "dmuscan":0.2,
                 "Tmax":1000.0,
-                "Tstart":700.0,           #change to 300 later
+                "Tstart":450.0,           #change to 300 later
                 "R":8.3144621e-3
             }
             return control_dictionary
@@ -122,12 +147,29 @@ def map_variable_to_phase(initialvalue,phase,n):
     return sitepotential_input
 
 
+def replace_word_in_file(file_path, old_word, new_word):
+   try:
+       # Open the file in read mode to get its content
+       with open(file_path, 'r') as file:
+           content = file.read()
+
+       # Replace all instances of the old word with the new word
+       updated_content = content.replace(old_word, new_word)
+
+       # Open the file in write mode to update it with the new content
+       with open(file_path, 'w') as file:
+           file.write(updated_content)
+               
+   except FileNotFoundError:
+       print(f"Error: The file '{file_path}' does not exist.")
+   except IOError:
+       print("An error occurred while reading or writing the file.")
+
+
+
 if __name__ == '__main__':
-    arr = np.ones([2,2,2,2])
-    arr = arr/np.sum(arr)
-    print(np.sum(arr))
-    position_type_matrix=np.array([[2,3],[1,1]],ndmin=2)
-    print(get_cluster_prob(arr,position_type_matrix))
+    a,b=read_cluster_energy("basic.in")
+    print(b)
 
 
 '''

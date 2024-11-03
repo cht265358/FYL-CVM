@@ -12,33 +12,13 @@ from scipy.optimize import brute
 from scipy.optimize import basinhopping
 from multiprocessing import Pool
 from matplotlib import cm
+from fylcvm import FYLCVM
 #svm stands for site_variable_matrix
 
-class FYLCVM:       #base class for low symmetry structure
+class FCC(FYLCVM):       #sub class for FCC
     def __init__(self,component,maxsize,E,vibration_parameter,local_parameter,elastic_para,control_dict):                #initialize all variables
-        #print("Initialize FYL-CVM\n")
-        kB=1.380649e-23  #boltzman constant, unit:J/K
-        N=6.02e23;       #number of particles, the size of the system, here we use 1 mole
-        self.lattice="monoclinic"
-        self.component=component
-        self.clustersize=maxsize
-        self.shape=[self.component]*self.clustersize    #ignore using basic cluster with different size first
-        self.map_basic_cluster_energy(E)
-        self.vibrationalenergy=np.zeros(self.shape)
-        self.vib_para=vibration_parameter             #vibration parameter with default of 1
-        self.vib_matrix=np.array([1,1,1])
-        self.local_para=local_parameter
-        self.elastic_parameter=elastic_para
-        self.starting_point_list=[]
-        self.phase_boundary_list=[]
-        self.mu_Tlist=[]
-        self.phb_status_list=[]
-        self.R=control_dict['R']
-        self.dmurough=control_dict['dmurough']
-        self.dmuprecise=control_dict['dmuprecise']
-        self.dmuscan=control_dict['dmuscan']
-        self.dT=control_dict['dT']
-        self.Tmax=control_dict['Tmax']
+        super().__init__(component,maxsize,E,vibration_parameter,local_parameter,elastic_para,control_dict)
+        self.lattice="FCC"
 
     def map_basic_cluster_energy(self,E):     #map the basic cluster energy to high dimensional array
         self.basicclusterenergy=np.zeros(self.shape)                  #use high dimensional array, input by hand now
@@ -685,8 +665,9 @@ class FYLCVM:       #base class for low symmetry structure
         print("scan the phase boundary between mu={:.2f} and {:.2f} at T={:.2f}".format(mustart,muend,T))
         phblist=np.empty((0,2))
         mulist=np.empty(0)
+        mu1=666.0
         muuse=mustart
-        while muuse and muuse<muend:                             #continue search with new muuse until boundary is reached
+        while (muuse or mu1) and muuse<muend:                             #continue search with new muuse until boundary is reached
             (mu1,muuse,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,muuse,self.dmuscan,int((muend-muuse)/self.dmuscan)+1)
             if muuse and mu1:
                 if scan:

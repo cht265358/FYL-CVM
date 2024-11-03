@@ -12,67 +12,27 @@ from scipy.optimize import brute
 from scipy.optimize import basinhopping
 from multiprocessing import Pool
 from matplotlib import cm
+from fylcvm import FYLCVM
 #svm stands for site_variable_matrix
 
-class FYLCVM:       #base class for low symmetry structure
+class BCC(FYLCVM):       #sub class for BCC
     def __init__(self,component,maxsize,E,vibration_parameter,local_parameter,elastic_para,control_dict):                #initialize all variables
-        #print("Initialize FYL-CVM\n")
-        kB=1.380649e-23  #boltzman constant, unit:J/K
-        N=6.02e23;       #number of particles, the size of the system, here we use 1 mole
-        self.lattice="monoclinic"
-        self.component=component
-        self.clustersize=maxsize
-        self.shape=[self.component]*self.clustersize    #ignore using basic cluster with different size first
-        self.map_basic_cluster_energy(E)
-        self.vibrationalenergy=np.zeros(self.shape)
-        self.vib_para=vibration_parameter             #vibration parameter with default of 1
-        self.vib_matrix=np.array([1,1,1])
-        self.local_para=local_parameter
-        self.elastic_parameter=elastic_para
-        self.starting_point_list=[]
-        self.phase_boundary_list=[]
-        self.mu_Tlist=[]
-        self.phb_status_list=[]
-        self.R=control_dict['R']
-        self.dmurough=control_dict['dmurough']
-        self.dmuprecise=control_dict['dmuprecise']
-        self.dmuscan=control_dict['dmuscan']
-        self.dT=control_dict['dT']
-        self.Tmax=control_dict['Tmax']
+        super().__init__(self,component,maxsize,E,vibration_parameter,local_parameter,elastic_para,control_dict)
+        self.lattice="BCC"
 
-    def map_basic_cluster_energy(self,E):     #map the basic cluster energy to high dimensional array
+    def map_basic_cluster_energy(self,e):     #map the basic cluster energy to high dimensional array
+        e21=e[0],e22=e[1]
         self.basicclusterenergy=np.zeros(self.shape)                  #use high dimensional array, input by hand now
         if self.clustersize==4:
             for i,j,k,l in itertools.product(range(self.component), repeat=4):       #eith use an elegant way or write everything without loop at all
-                self.basicclusterenergy[i][j][k][l]=E[i+k+j+l]
+                self.basicclusterenergy[i][j][k][l]=(int(i==j)+int(k==l))*e22+(int(i==k)+int(i==l)+int(j==k)+int(j==l))*e21
     
-    '''def map_vibrational_energy(self,T):        #w is w matrix normalized
-        wmat=self.vib_matrix
-        pab=1.05
-        Fmat=[-3*T*np.log(T/wmat[0]),-1.5*T*np.log(T/wmat[0])-1.5*T*np.log(T/wmat[1]),-0.5*T*np.log(T/wmat[0])
-             -2*T*np.log(T/wmat[1])-0.5*T*np.log(T/wmat[2]),-1.5*T*np.log(T/wmat[1])-1.5*T*np.log(T/wmat[2]),-3*T*np.log(T/wmat[2])]
-        for i,j,k,l in itertools.product(range(self.component), repeat=4):       #eith use an elegant way or write everything without loop at all
-            self.vibrationalenergy[i][j][k][l]=Fmat[i+k+j+l]'''
-    
-    def map_vibrational_energy(self,T):        #Assume symmetry wAA=wBB
+    def map_vibrational_energy(self,T):        #deal with it later
         Fmat=[0,1.5*T*self.R*np.log(self.vib_para*self.local_para[1]),2*T*self.R*np.log(self.vib_para*self.local_para[2])
               ,1.5*T*self.R*np.log(self.vib_para*self.local_para[3]),0]
         #Fmat=[0,1.5*T*self.R*np.log(self.vib_para),2*T*self.R*np.log(self.vib_para*1.05),1.5*T*self.R*np.log(self.vib_para),0]
         for i,j,k,l in itertools.product(range(self.component), repeat=4):       #eith use an elegant way or write everything without loop at all
             self.vibrationalenergy[i][j][k][l]=Fmat[i+k+j+l]
-
-    def compute_site_variable_matrix(self,site_variable_input,composition,T):         #extend it to larger system if expression is known
-        svm=np.ones((self.component,self.clustersize))
-        for i in range(self.clustersize-1):
-            svm[1][i]=np.exp(site_variable_input[i])                                  #the input is the log of site variable
-        nominator=0
-        denominator=0
-        shape1=[self.component]*(self.clustersize-1)
-        for i,j,k in itertools.product(range(self.component), repeat=3):
-            nominator+=(composition[1]-(1/self.clustersize)*(i+j+k+0))*svm[i][0]*svm[j][1]*svm[k][2]*np.exp(-self.basicclusterenergy[i][j][k][0]/(self.R*T))
-            denominator+=(-composition[1]+(1/self.clustersize)*(i+j+k+1))*svm[i][0]*svm[j][1]*svm[k][2]*np.exp(-self.basicclusterenergy[i][j][k][1]/(self.R*T))
-        svm[1][3]=nominator/denominator
-        return svm
         
         #merge vibrational energy into basic cluster energy
     def compute_partition_function(self,svm,T,Fvib):
