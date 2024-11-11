@@ -23,9 +23,9 @@ if __name__ == '__main__':
     print("Welcome to FYL-CVM code")
     warnings.filterwarnings('ignore')
     start_time = time.time()
-    argv=["-t","-vib=0.95"]
-    #argv=["-t","-unit=kj"]
-    #argv=["-t","-vib=1.1"]
+    argv=["-t"]
+    #argv=["-t","-unit=kj","-vib=1.2"]
+    #argv=["-t","-vib=1"]
     #inputs=utility.userinput(sys.argv)              
     inputs=utility.userinput(argv)
     inputs.read_input()
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     control_dict=utility.read_control_variable(inputs.controlfilename,inputs.unituse)
     #test the code
     if inputs.testmode:
-        task="scan"
+        task="compute"
         composition=[0.38225,0.61775]
     
         print("code test mod")
@@ -47,17 +47,20 @@ if __name__ == '__main__':
             result=myCVM.optimize_free_energy(1,composition,"basinhopping")
             myCVM.output_optimization(result,1,composition)
         elif task=="trace":
-            dictin={'range': [18.2,18.4], 'T': 600, 'phase': ['L10', 'A1']}
-            (newphb,starting_pointnumber)=myCVM.trace_phase_boundary(dictin)
+            dictin={'range': [7.4,7.6], 'T': 1, 'phase': ['L10', 'L12'],'composition':[0.42,0.38]}
+            (newphb,muT,starting_pointnumber)=myCVM.trace_phase_boundary_v1(dictin)
+            #(newphb,muT,starting_pointnumber)=myCVM.trace_phase_boundary(dictin)
             print(myCVM.starting_point_list)
         elif task=="compute":
-            myCVM.compute_phase_diagram(control_dict['Tstart'],-75,75,inputs.phasediagram_name)
-            print(myCVM.phase_boundary_list)
+            myCVM.compute_phase_diagram(control_dict['Tstart'],0,25,inputs.phasediagram_name)
+            #myCVM.compute_phase_diagram(2.6,0,10,inputs.phasediagram_name)
+            #print(myCVM.phase_boundary_list)
             #myCVM.plot_phase_diagram0(output_name)
         elif task=="scatter":
-            myCVM.scan_phase_diagram(control_dict['Tstart'],-75,75)
+            #myCVM.scan_phase_diagram(control_dict['Tstart'],-75,75)
+            myCVM.scan_phase_diagram(1,0,10)
         elif task=="scan":
-            myCVM.scan_phase_boundary(1,0,20)
+            myCVM.scan_phase_boundary(1,0,10)
         elif task=="find":
             myCVM.find_phase_boundary(500,900,[0.5,0.5],"brute")
         elif task=="brute":

@@ -39,8 +39,7 @@ def plot_phase_diagram(phase_boundary_list,signal_list,dT,Tstart,filename="phase
     #plt.xlim(0.1, 0.5)
     #plt.ylim(1, 2.4)
     plt.savefig(filename)
-    plt.show()
-
+    #plt.show()
 
 def solve_invariant(x_t1,x_t2,dT):
    T=x_t1[2][-1]+dT*(x_t1[0][-1]-x_t2[0][-1])/(x_t1[0][-2]-x_t2[0][-2])
@@ -135,10 +134,11 @@ def check_positive_v1(x):
                 return 0
         return -1
 
-def plot_phase_diagram_rough(phblist):
+def plot_phase_diagram_rough(phblist,filename="rough.png"):
     for phb in phblist:
         plt.plot(phb[0],phb[2])
         plt.plot(phb[1],phb[2])
+    plt.savefig(filename)  
     plt.show()
 
 def plot_scatter_rough(phblist,filename="scatter.png"):
@@ -156,9 +156,4 @@ if __name__ == '__main__':
     else:
         signallist=[2,0,0,0]
         plot_phase_diagram(xt,signallist,0.05,1)
-    #plot_phase_diagram(xt,signallist,0.05,1,"pdlocal.png")
-    
-    
-    
-    #solve_invariant(testinputx[0],testinputx[1],testinput[0],testinput[1])
-    #
+        

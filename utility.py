@@ -112,12 +112,13 @@ def read_control_variable(controlfilename,unit):
         if unit=="hypo":
             control_dictionary={
                 "dT":0.05,             
-                "dmurough":0.1,
-                "dmuprecise":0.02,
-                "dmuscan":0.2,
-                "Tmax":2.5,
+                "dmurough":0.2,
+                "dmuprecise":0.01,
+                "dmuscan":1.0,
+                "Tmax":3.5,
                 "Tstart":1.0,
-                "R":1.0
+                "R":1.0,
+                "mutol":0.0101
             }
             return control_dictionary
         elif unit=="kj":
@@ -126,9 +127,10 @@ def read_control_variable(controlfilename,unit):
                 "dmurough":0.5,
                 "dmuprecise":0.05,
                 "dmuscan":0.2,
-                "Tmax":1000.0,
-                "Tstart":450.0,           #change to 300 later
-                "R":8.3144621e-3
+                "Tmax":900.0,
+                "Tstart":550.0,           #change to 300 later
+                "R":8.3144621e-3,
+                "mutol":0.0201
             }
             return control_dictionary
 
@@ -165,7 +167,11 @@ def replace_word_in_file(file_path, old_word, new_word):
    except IOError:
        print("An error occurred while reading or writing the file.")
 
-
+def compute_dmu(muspace):
+    if len(muspace)<=1:
+        return 0
+    else:
+        return muspace[-1]-muspace[-2]
 
 if __name__ == '__main__':
     a,b=read_cluster_energy("basic.in")

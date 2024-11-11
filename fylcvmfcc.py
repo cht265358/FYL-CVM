@@ -6,6 +6,7 @@ import sys
 import itertools
 import utility
 import plotter
+import mapping
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from scipy.optimize import brute
@@ -28,7 +29,6 @@ class FCC(FYLCVM):       #sub class for FCC
     
     '''def map_vibrational_energy(self,T):        #w is w matrix normalized
         wmat=self.vib_matrix
-        pab=1.05
         Fmat=[-3*T*np.log(T/wmat[0]),-1.5*T*np.log(T/wmat[0])-1.5*T*np.log(T/wmat[1]),-0.5*T*np.log(T/wmat[0])
              -2*T*np.log(T/wmat[1])-0.5*T*np.log(T/wmat[2]),-1.5*T*np.log(T/wmat[1])-1.5*T*np.log(T/wmat[2]),-3*T*np.log(T/wmat[2])]
         for i,j,k,l in itertools.product(range(self.component), repeat=4):       #eith use an elegant way or write everything without loop at all
@@ -40,6 +40,13 @@ class FCC(FYLCVM):       #sub class for FCC
         #Fmat=[0,1.5*T*self.R*np.log(self.vib_para),2*T*self.R*np.log(self.vib_para*1.05),1.5*T*self.R*np.log(self.vib_para),0]
         for i,j,k,l in itertools.product(range(self.component), repeat=4):       #eith use an elegant way or write everything without loop at all
             self.vibrationalenergy[i][j][k][l]=Fmat[i+k+j+l]
+    
+    def map_real_energy(self,T):
+        print("Map energy from energy files")     #just a place holder
+        Fclass=mapping.F_FCC("FCC","energy.in")
+        Emat=[0,Fclass.AAAB(T),Fclass.AABB(T),Fclass.ABBB(T),0]
+        for i,j,k,l in itertools.product(range(self.component), repeat=4): 
+            self.totalenergy[i][j][k][l]=Emat[i+k+j+l]
 
     def compute_site_variable_matrix(self,site_variable_input,composition,T):         #extend it to larger system if expression is known
         svm=np.ones((self.component,self.clustersize))
@@ -55,6 +62,13 @@ class FCC(FYLCVM):       #sub class for FCC
         return svm
         
         #merge vibrational energy into basic cluster energy
+    
+    def compute_partition_function_real(self,spm,T):
+        partition=0
+        for i,j,k,l in itertools.product(range(self.component), repeat=4):
+            partition+=np.exp((spm[i][0]+spm[j][1]+spm[k][2]+spm[l][3]-self.totalenergy[i][j][k][l])/(self.R*T))
+        return partition
+
     def compute_partition_function(self,svm,T,Fvib):
         if svm[0][0]==1:                 #matrix is for site variable
             partition=0
@@ -549,7 +563,7 @@ class FCC(FYLCVM):       #sub class for FCC
                     print("phase boundary ends")
                     return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),0
                 if self.identify_phase(result2.x)!=highphase:
-                    print("new phase detected, follow two new boundary")
+                    print("new phase "+self.identify_phase(result2.x)+" detected, follow two new boundary")
                     newstartingdict={
                         "range":[mustart,muend],
                         "T":T,
@@ -579,7 +593,7 @@ class FCC(FYLCVM):       #sub class for FCC
                     print("phase boundary ends")
                     return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),0
                 if self.identify_phase(result1.x)!=lowphase:
-                    print("new phase detected, follow two new boundary")
+                    print("new phase "+self.identify_phase(result1.x)+" detected, follow two new boundary")
                     newstartingdict={
                         "range":[mustart,muend],
                         "T":T,
@@ -602,8 +616,9 @@ class FCC(FYLCVM):       #sub class for FCC
                         print("new phase boundary goes downward")
                     return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),2
             else:
-                print("new phase detected, start two new search")
-                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustart,self.dmurough,100)    #one forward and one reverse
+                mustartuse=mustart
+                print("new phase "+currentphase+" detected, start two new search")
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,mustartuse,self.dmurough,100)    #one forward and one reverse
                 if muend:
                     newstartingdict={
                             "range":[mustart,muend],
@@ -613,7 +628,7 @@ class FCC(FYLCVM):       #sub class for FCC
                     print("new starting dict is")
                     print(newstartingdict)
                     self.starting_point_list.append(newstartingdict)
-                (muend,mustart,x2,x1,E2,E1,result2,result1)=self.search_phase_boundary(T,mustart,-self.dmurough,100)
+                (muend,mustart,x2,x1,E2,E1,result2,result1)=self.search_phase_boundary(T,mustartuse,-self.dmurough,100)
                 if muend:
                     newstartingdict={
                             "range":[mustart,muend],
@@ -623,6 +638,79 @@ class FCC(FYLCVM):       #sub class for FCC
                     print("new starting dict is")
                     print(newstartingdict)
                     self.starting_point_list.append(newstartingdict)
+                return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),2
+            #print("mustart is "+str(mustart)+" muend is "+str(muend)+" x1 is "+str(x1)+" x2 is "+str(x2)+" at T="+str(T))
+            print("mu is between {:.2f} and {:.2f} composition is between {:.3f} and {:.3f} at T={:.2f}".format(mustart,muend,x1,x2,T))
+            #print("sitepot1 is "+str(result1.x)+" sitepot2 is "+str(result2.x))     
+            x1mat=np.append(x1mat,x1)
+            x2mat=np.append(x2mat,x2)
+            Tspace=np.append(Tspace,T)
+            muspace=np.append(muspace,0.5*(mustart+muend))
+            count+=1
+        
+        return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),1
+
+    def trace_phase_boundary_v1(self,startingdict):           #always move in the direction of incresing mu
+        lowphase=startingdict['phase'][0]
+        highphase=startingdict['phase'][1]
+        print("lowphase is "+lowphase)
+        print("highphase is "+highphase)
+        Tmin=startingdict['T']
+        mustart=startingdict['range'][0]
+        print("######trace phase boundary between "+lowphase+" and "+highphase+" ######")
+        x1mat=np.array([startingdict["composition"][0]])
+        x2mat=np.array([startingdict["composition"][1]])
+        Tspace=np.array([Tmin])               #flexable value
+        muspace=np.array([0.5*(startingdict['range'][0]+startingdict['range'][1])])  
+        T=Tmin
+        count=1
+
+        while (T<=self.Tmax):
+            T=self.dT*count+Tmin
+            mustart+=utility.compute_dmu(muspace)             #edit after compute_dmu() has value
+            result=self.optimize_grand_potential(T,mustart,"BFGS_v2")               #try to get rid of this step later
+            currentphase=self.identify_phase(result.x)
+            #print("current phase is "+currentphase)
+            if currentphase==lowphase:
+                print("lowphase")
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,self.dmurough,10)
+                if muend==False:
+                    print("phase boundary ends")
+                    return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),0
+                if self.identify_phase(result2.x)!=highphase:                  #new phase found
+                    print("new phase "+self.identify_phase(result2.x)+" detected, follow two new boundary")
+                    self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
+                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,muend,self.dmurough,10)
+                    if muend:
+                        self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
+                    else:
+                        print("phase boundary might go downward")
+                    return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),2
+            elif currentphase==highphase:
+                #search_phase_boundary_v1 always from return mu low to high
+                print("highphase")
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,-self.dmurough,10)
+                if muend==False:
+                    print("phase boundary ends")
+                    return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),0
+                if self.identify_phase(result1.x)!=lowphase:
+                    print("new phase "+self.identify_phase(result1.x)+" detected, follow two new boundary")
+                    self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
+                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,-self.dmurough,10)
+                    if muend:
+                        self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
+                    else:
+                        print("new phase boundary goes downward")
+                    return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),2
+            else: 
+                mustartuse=mustart       #just run two independent search
+                print("new phase "+currentphase+" detected, start two new search")
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,self.dmurough,10)    #one forward and one reverse
+                if muend:
+                    self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,-self.dmurough,10)
+                if muend:
+                    self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
                 return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),2
             #print("mustart is "+str(mustart)+" muend is "+str(muend)+" x1 is "+str(x1)+" x2 is "+str(x2)+" at T="+str(T))
             print("mu is between {:.2f} and {:.2f} composition is between {:.3f} and {:.3f} at T={:.2f}".format(mustart,muend,x1,x2,T))
@@ -651,8 +739,8 @@ class FCC(FYLCVM):       #sub class for FCC
             currentphase=self.identify_phase(result.x)
             if i>0:
                 if currentphase!=phasesave:
-                    #print("phase transition between "+currentphase+" and "+phasesave+"\nmu from "+str(muuse-steplength)+" to "+str(muuse))
-                    print("phase transition between {} and {}".format(phasesave,currentphase)) 
+                    print("phase transition between "+phasesave+" and "+currentphase+"\nmu from "+str(muuse-steplength)+" to "+str(muuse))
+                    #print("phase transition between {} and {}".format(phasesave,currentphase)) 
                     #print("site potential is "+str(result.x)+" and "+str(resultsave.x))             
                     return muuse-steplength,muuse,cdata[i-1],cdata[i],Esave,E,resultsave,result
             phasesave=currentphase
@@ -661,6 +749,54 @@ class FCC(FYLCVM):       #sub class for FCC
         print("can't find phase boundary")
         return False,False,cdata[i-1],cdata[i],Esave,E,resultsave,result
     
+    def search_phase_boundary_v1(self,T,mustart,steplength,steps=20):
+        cdata=np.zeros(steps)
+        for i in range(steps):
+            muuse=mustart+i*steplength
+            result=self.optimize_grand_potential(T,muuse,"BFGS_v2")  
+            #print("current phase is "+str(self.identify_phase(result.x))+" at potential "+str(muuse)+" para is "+str(result.x))
+            (potential,composition,F,E)=self.compute_grand_potential_output(result.x,T,muuse)
+            cdata[i]=composition[0]
+            currentphase=self.identify_phase(result.x)
+            if i>0:
+                if currentphase!=phasesave:
+                    print("phase transition between "+currentphase+" and "+phasesave+"\nmu from "+str(muuse-steplength)+" to "+str(muuse))          
+                    return self.search_phase_boundary_bisection(T,muuse-steplength,muuse,phasesave,currentphase)
+            phasesave=currentphase
+            Esave=E
+            resultsave=result
+        print("can't find phase boundary")
+        return False,False,cdata[i-1],cdata[i],Esave,E,resultsave,result
+    
+    def search_phase_boundary_bisection(self,T,mustart,muend,phasestart,phaseend,composition=np.array([0,1])):        #only use this function to search within a given range
+        if mustart>muend:
+            mustart,muend=muend,mustart         #make sure mustart is always smaller
+            phasestart,phaseend=phaseend,phasestart
+        resultlist=[]
+        while np.abs(mustart-muend)>self.mutol:
+            mumid=0.5*(mustart+muend)
+            result=self.optimize_grand_potential(T,mumid,"BFGS_v2") 
+            resultlist.append(result)
+            phasemid=self.identify_phase(result.x)
+            if phasemid!=phasestart and phasemid!=phaseend:        #need recursion
+                print("new phase "+phasemid+" detected?")
+            elif phasemid==phaseend:
+                muend=mumid
+            elif phasemid==phasestart:
+                mustart=mumid
+        
+        #use logic to remove last run later
+        if mustart==mumid:
+            (potential1,cstart,F1,Estart)=self.compute_grand_potential_output(result.x,T,mustart)
+            result2=self.optimize_grand_potential(T,muend,"BFGS_v2")    #optimize here later
+            (potential2,cend,F2,Eend)=self.compute_grand_potential_output(result2.x,T,muend)
+        else:
+            (potential1,cend,F1,Eend)=self.compute_grand_potential_output(result.x,T,muend)
+            result2=self.optimize_grand_potential(T,mustart,"BFGS_v2")    #optimize here later
+            (potential2,cstart,F2,Estart)=self.compute_grand_potential_output(result2.x,T,mustart)
+            result,result2=result2,result   #swap to make sure mustart match result and muend match result2
+        return mustart,muend,cstart[0],cend[0],Estart,Eend,result,result2
+   
     def scan_phase_boundary(self,T,mustart,muend,scan=True):        #scan the phase boundary across a wide 
         print("scan the phase boundary between mu={:.2f} and {:.2f} at T={:.2f}".format(mustart,muend,T))
         phblist=np.empty((0,2))
@@ -685,6 +821,22 @@ class FCC(FYLCVM):       #sub class for FCC
             return phblist,np.min(mulist),np.max(mulist)
         else:
             return phblist,0,0
+
+    def scan_phase_boundary_v1(self,T,mustart,muend):        #scan the phase boundary across a wide 
+        if mustart>muend:
+            mustart,muend=muend,mustart
+        print("scan the phase boundary between mu={:.2f} and {:.2f} at T={:.2f}".format(mustart,muend,T))
+        #phblist=np.empty((0,2))
+        mulist=np.empty(0)
+        mu1=666.0
+        muuse=mustart
+        while (muuse or mu1) and muuse<muend:                             #continue search with new muuse until boundary is reached
+            (mu1,muuse,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary(T,muuse,self.dmuscan,int((muend-muuse)/self.dmuscan)+1)
+            if muuse and mu1:
+                (mua,mub,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_bisection(T,mu1,muuse,self.identify_phase(result1.x),self.identify_phase(result2.x))
+                self.write_input_dict(T,mua,mub,result1,result2,x1,x2)
+        
+        print("scan phase boundary finished")          #add scan algorithm later
     
     def scan_phase_diagram(self,Tstart,mustart,muend,phase_diagram_name="scatter.png"):
         #plot the phase diagram by scanning through the whole space
@@ -706,10 +858,10 @@ class FCC(FYLCVM):       #sub class for FCC
     
     def compute_phase_diagram(self,Tstart,mustart,muend,phase_diagram_name):
         #first scan phase boundary starting point
-        placeholder=self.scan_phase_boundary(Tstart,mustart,muend)
+        placeholder=self.scan_phase_boundary_v1(Tstart,mustart,muend)
         print("scan finished, now start search")  
         while len(self.starting_point_list)>0:    #dictionary list of starting points
-            (new_phase_boundary,mu_T,signal)=self.trace_phase_boundary(self.starting_point_list[0])
+            (new_phase_boundary,mu_T,signal)=self.trace_phase_boundary_v1(self.starting_point_list[0])
             print("search finished, will move on to next starting point possible")
             self.phase_boundary_list.append(new_phase_boundary)
             self.mu_Tlist.append(mu_T)
@@ -719,7 +871,14 @@ class FCC(FYLCVM):       #sub class for FCC
         print(self.phase_boundary_list,file=f)
         f.close()
         utility.replace_word_in_file("phase_boundary_list.txt","array","np.array")          #make the output file that can be directly used by plotter
-        plotter.plot_phase_diagram(self.phase_boundary_list,self.phb_status_list,self.dT,Tstart,phase_diagram_name)
+        g=open("mu_T_list.txt","w")
+        print(self.mu_Tlist,file=g)
+        g.close()
+        utility.replace_word_in_file("mu_T_list.txt","array","np.array")
+        try: 
+            plotter.plot_phase_diagram(self.phase_boundary_list,self.phb_status_list,self.dT,Tstart,phase_diagram_name)
+        except Exception:
+            plotter.plot_phase_diagram_rough(self.phase_boundary_list)
 
     def plot_phase_diagram0(self,filename):
         for i in range(len(self.phase_boundary_list)):
@@ -727,6 +886,15 @@ class FCC(FYLCVM):       #sub class for FCC
             plt.plot(listuse[0],listuse[2])
             plt.plot(listuse[1],listuse[2])
         plt.savefig(filename)
+
+    def write_input_dict(self,T,mustart,muend,result1,result2,x1,x2):
+        newstartingdict={
+                        "range":[mustart,muend],
+                        "T":T,
+                        "phase":[self.identify_phase(result1.x),self.identify_phase(result2.x)],
+                        "composition":[x1,x2]
+                    }
+        self.starting_point_list.append(newstartingdict)
 
     def output_optimization(self,result,T,component_comp,method):
         if method=="brute":

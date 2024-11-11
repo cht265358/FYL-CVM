@@ -25,6 +25,7 @@ class FYLCVM:       #base class for low symmetry structure
         self.shape=[self.component]*self.clustersize    #ignore using basic cluster with different size first
         self.map_basic_cluster_energy(E)
         self.vibrationalenergy=np.zeros(self.shape)
+        self.totalenergy=np.zeros(self.shape)
         self.vib_para=vibration_parameter             #vibration parameter with default of 1
         self.vib_matrix=np.array([1,1,1])
         self.local_para=local_parameter
@@ -39,6 +40,7 @@ class FYLCVM:       #base class for low symmetry structure
         self.dmuscan=control_dict['dmuscan']
         self.dT=control_dict['dT']
         self.Tmax=control_dict['Tmax']
+        self.mutol=control_dict['mutol']
 
     def map_basic_cluster_energy(self,E):     #map the basic cluster energy to high dimensional array
         self.basicclusterenergy=np.zeros(self.shape)                  #use high dimensional array, input by hand now
@@ -53,6 +55,9 @@ class FYLCVM:       #base class for low symmetry structure
              -2*T*np.log(T/wmat[1])-0.5*T*np.log(T/wmat[2]),-1.5*T*np.log(T/wmat[1])-1.5*T*np.log(T/wmat[2]),-3*T*np.log(T/wmat[2])]
         for i,j,k,l in itertools.product(range(self.component), repeat=4):       #eith use an elegant way or write everything without loop at all
             self.vibrationalenergy[i][j][k][l]=Fmat[i+k+j+l]'''
+    
+    def map_real_energy(self,T):
+        print("This depends on crystal structure")     #just a place holder
     
     def map_vibrational_energy(self,T):        #Assume symmetry wAA=wBB
         Fmat=[0,1.5*T*self.R*np.log(self.vib_para*self.local_para[1]),2*T*self.R*np.log(self.vib_para*self.local_para[2])
@@ -654,6 +659,9 @@ class FYLCVM:       #base class for low symmetry structure
             count+=1
         
         return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),1
+
+    def trace_phase_boundary_v1(self,startingdict):
+        print("helloworld placeholder")
 
     def compute_dmu(self):
         return 0
