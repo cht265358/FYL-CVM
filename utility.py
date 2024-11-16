@@ -83,6 +83,43 @@ class userinput:             #read in user input
                 self.inputdictionary.update({keyword:True})
         self.assign_input()
 
+class phaseboundary:
+    def __init__(self,Tstart,mustart,muend,lowphase,highphase,c1,c2,direction=1):
+        self.status="open"
+        self.lowphase=lowphase
+        self.highphase=highphase
+        self.mustart=mustart
+        self.muend=muend
+        self.mustartpoint=0.5*(mustart+muend)
+        self.muendpoint=0.0
+        self.Tstart=Tstart
+        self.Tend=0
+        self.x1mat=np.array([c1])
+        self.x2mat=np.array([c2])
+        self.Tspace=np.array([Tstart]) 
+        self.muspace=np.array([0.5*(mustart+muend)])
+        self.direction=direction
+        print("creating new node between "+lowphase+" and "+highphase+" at T="+str(Tstart))
+
+def compare_phb(phb1,phb2,mutol=0.1,Ttol=0.005):   #phb1 is the phb to be determined and phb2 is the existing phb
+    #return 1 means there is overlap with other nodes
+    if phb2.status=="exit" or phb2.status=="boundary":
+        phb2.muendpoint=phb2.muspace[-1]
+    else:
+        return 0
+    if np.abs(phb1.mustartpoint-phb2.mustartpoint)<mutol and np.abs(phb1.Tstart-phb2.Tstart)<Ttol:
+        return 1      
+    elif np.abs(phb1.mustartpoint-phb2.muendpoint)<mutol and np.abs(phb1.Tstart-phb2.Tend)<Ttol:
+        return 1
+    else:
+        return 0
+
+def order_phb(phb):
+    if phb[0][1]<phb[0][0]:
+        return np.flip(phb,axis=0)
+    else:
+        return phb
+    
 def read_cluster_energy(filename):
     txt=np.loadtxt(filename)
     if txt.ndim==1:
@@ -118,7 +155,9 @@ def read_control_variable(controlfilename,unit):
                 "Tmax":3.5,
                 "Tstart":1.0,
                 "R":1.0,
-                "mutol":0.0101
+                "mutol":0.0101,
+                "mumin":0.0,
+                "mumax":25.0
             }
             return control_dictionary
         elif unit=="kj":
@@ -130,7 +169,9 @@ def read_control_variable(controlfilename,unit):
                 "Tmax":900.0,
                 "Tstart":550.0,           #change to 300 later
                 "R":8.3144621e-3,
-                "mutol":0.0201
+                "mutol":0.0201,
+                "mumin":-75.0,
+                "mumax":75.0
             }
             return control_dictionary
 

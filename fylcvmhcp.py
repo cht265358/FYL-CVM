@@ -726,13 +726,15 @@ class FCC(FYLCVM):       #sub class for FCC
     def trace_phase_boundary_v2(self,phb):           #always move in the direction of incresing mu
         lowphase=phb.lowphase
         highphase=phb.highphase
-        mustart=phb.mustart
-        T=phb.Tstart
-        print("######trace phase boundary between "+lowphase+" and "+highphase+" ######")
         print("lowphase is "+lowphase)
         print("highphase is "+highphase)
-        print("T is "+str(T))
-        print("direction is "+str(phb.direction))
+        mustart=phb.mustart
+        print("######trace phase boundary between "+lowphase+" and "+highphase+" ######")
+        #x1mat=np.array([startingdict["composition"][0]])
+        #x2mat=np.array([startingdict["composition"][1]])
+        #Tspace=np.array([Tmin])               #flexable value
+        #muspace=np.array([0.5*(startingdict['range'][0]+startingdict['range'][1])])  
+        T=phb.Tstart
         count=1
 
         while (self.Tmin<=T<=self.Tmax):
@@ -743,127 +745,70 @@ class FCC(FYLCVM):       #sub class for FCC
             #print("current phase is "+currentphase)
             if currentphase==lowphase:
                 (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,self.dmurough,10)
-                if muend==1000:
+                if muend=="boundary":
                     print("phase boundary ends at assigned boundary")
                     phb.status="boundary"
                     return phb
                 elif muend==False:
-                    #This corresponds to invariant point so start a new node connected to the old node, also the direction is -1
-                    print("Find invariant point1!!!!!!!!1!!!!!!!!!!!!!!!!")
-                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,muendsave,self.dmurough,20)
+                    #This corresponds to invariant so start a new node connected to the old node, also the direction is c
+                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT,muendsave,self.dmurough,10)
                     if not mustart:
                         print("phase boundary end unexpectedly")
                         phb.status="error"
                         return phb
                     else:
-                        self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-1)
-                        phb.status="exit"
-                        return phb        
+
+                        
                 if self.identify_phase(result2.x)!=highphase:                  #new phase found
                     print("new phase "+self.identify_phase(result2.x)+" detected, follow two new boundary")
-                    self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
+                    self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
                     (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,muend,self.dmurough,10)
                     if muend:
-                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
-                        phb.status="exit"
+                        self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
                     else:
-                        (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,muendsave,self.dmurough,10)
-                        if mustart:
-                            self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-1)
-                            phb.status="exit"
-                        else:
-                            print("phase boundary end unexpectedly")
-                            phb.status="error"
-                    return phb
+                        print("phase boundary might go downward")
+                    return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),2
             elif currentphase==highphase:
                 #search_phase_boundary_v1 always from return mu low to high
-                print("highphase is "+highphase)
-                print("mustart is "+str(mustart))
-                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,-self.dmurough,20)
-                if muend==1000:
-                    print("phase boundary ends at assigned boundary")
-                    phb.status="boundary"
-                    return phb
-                elif muend==False:
-                    #This corresponds to invariant point so start a new node connected to the old node, also the direction is -1
-                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,mustartsave,-self.dmurough,20)
-                    if not mustart:
-                        print("phase boundary end unexpectedly")
-                        phb.status="error"
-                        return phb
-                    else:
-                        self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-1)
-                        phb.status="exit"
-                        return phb   
+                print("highphase")
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,-self.dmurough,10)
+                if muend==False:
+                    print("phase boundary ends")
+                    return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),0
                 if self.identify_phase(result1.x)!=lowphase:
                     print("new phase "+self.identify_phase(result1.x)+" detected, follow two new boundary")
-                    self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
+                    self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
                     (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,-self.dmurough,10)
                     if muend:
-                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
-                        phb.status="exit"
+                        self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
                     else:
-                        (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,mustartsave,-self.dmurough,10)
-                        if mustart:
-                            self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-1)
-                            phb.status="exit"
-                        else:
-                            print("phase boundary end unexpectedly")
-                            phb.status="error"
-                    return phb
-            else:   
-                mustartuse=mustart       
+                        print("new phase boundary goes downward")
+                    return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),2
+            else: 
+                mustartuse=mustart       #just run two independent search
                 print("new phase "+currentphase+" detected, start two new search")
                 (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,self.dmurough,10)    #one forward and one reverse
-                print("mustart is "+str(mustart))
-                print("muend is "+str(muend))
-                if muend and muend!=1000:   #edit later for unlikely boundary condition
-                    self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
-                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,-self.dmurough,10)
-                    if muend and muend!=1000:
-                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
-                        phb.status="exit"
-                    elif muend==1000:
-                        phb.status="exit"
-                    elif muend==False:
-                        print("we are here?")
-                        (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,mustartsave,-self.dmurough,10)
-                        if mustart:
-                            self.start_new_phb(self.dT*phb.direction,mustart,muend,result1,result2,x1,x2)
-                            phb.status="exit"
-                        else:
-                            print("phase boundary end unexpectedly")
-                            phb.status="error"
-                elif muend==False:
-                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,self.dmurough,10)    #The reverse search must have boundary
-                    if not mustart:
-                        print("phase boundary end unexpectedly")
-                        phb.status="error"
-                    else:
-                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
-                        phb.status="exit"
-                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,mustartuse,self.dmurough,10)    #The reverse search must have boundary
-                    if not mustart:
-                        print("phase boundary end unexpectedly")
-                        phb.status="error"
-                    else:
-                        self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-1)
-                        phb.status="exit"
-                return phb
-
+                if muend:
+                    self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,-self.dmurough,10)
+                if muend:
+                    self.write_input_dict(T,mustart,muend,result1,result2,x1,x2)
+                return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),2
             #print("mustart is "+str(mustart)+" muend is "+str(muend)+" x1 is "+str(x1)+" x2 is "+str(x2)+" at T="+str(T))
             print("mu is between {:.2f} and {:.2f} composition is between {:.3f} and {:.3f} at T={:.2f}".format(mustart,muend,x1,x2,T))
             #print("sitepot1 is "+str(result1.x)+" sitepot2 is "+str(result2.x))     
-            phb.x1mat=np.append(phb.x1mat,x1)
-            phb.x2mat=np.append(phb.x2mat,x2)
-            phb.Tspace=np.append(phb.Tspace,T)
-            phb.muspace=np.append(phb.muspace,0.5*(mustart+muend))
+            x1mat=np.append(x1mat,x1)
+            x2mat=np.append(x2mat,x2)
+            Tspace=np.append(Tspace,T)
+            muspace=np.append(muspace,0.5*(mustart+muend))
             mustartsave=mustart
             muendsave=muend
             count+=1
         
-        phb.status="exit"
-        return phb
+        return np.stack((x1mat,x2mat,Tspace)),np.stack((muspace,Tspace)),1
+
+    def compute_dmu(self):
+        return 0
 
     def search_phase_boundary(self,T,mustart,steplength,steps):
         if steps>1000:            #max of 1000 steps
@@ -892,9 +837,6 @@ class FCC(FYLCVM):       #sub class for FCC
         cdata=np.zeros(steps)
         for i in range(steps):
             muuse=mustart+i*steplength
-            if muuse>self.mumax or muuse<self.mumin:
-                print("boundary encountered")
-                return False,1000,False,False,False,False,False,False
             result=self.optimize_grand_potential(T,muuse,"BFGS_v2")  
             #print("current phase is "+str(self.identify_phase(result.x))+" at potential "+str(muuse)+" para is "+str(result.x))
             (potential,composition,F,E)=self.compute_grand_potential_output(result.x,T,muuse)
@@ -979,18 +921,6 @@ class FCC(FYLCVM):       #sub class for FCC
                 self.write_input_dict(T,mua,mub,result1,result2,x1,x2)
         
         print("scan phase boundary finished")          #add scan algorithm later
-
-    def scan_phase_boundary_v2(self,T,mustart,muend):        #scan the phase boundary across a wide 
-        if mustart>muend:
-            mustart,muend=muend,mustart
-        print("scan for phase boundary starting point between mu={:.2f} and {:.2f} at T={:.2f}".format(mustart,muend,T))
-        muuse=mustart                          #now only search once
-        (mu1,muuse,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,muuse,self.dmuscan,int((muend-muuse)/self.dmuscan)+1)
-        if mu1:
-            self.start_new_phb(T,mu1,muuse,result1,result2,x1,x2)
-        else:
-            print("can't find phase boundary, please adjust search range")
-        print("scan phase boundary finished")          #add scan algorithm later
     
     def scan_phase_diagram(self,Tstart,mustart,muend,phase_diagram_name="scatter.png"):
         #plot the phase diagram by scanning through the whole space
@@ -1034,52 +964,6 @@ class FCC(FYLCVM):       #sub class for FCC
         except Exception:
             plotter.plot_phase_diagram_rough(self.phase_boundary_list)
 
-    def compute_phase_diagram_v1(self,Tstart,mustart,muend,phase_diagram_name="phasediagram.png"):
-        #first scan phase boundary starting point
-        placeholder=self.scan_phase_boundary_v2(Tstart,mustart,muend)
-        print("scan finished, now start search")
-        unfinishednode=1
-        while unfinishednode:  
-            unfinishednode=0
-            for i in range(len(self.node_list)):
-                currentphb=self.node_list[i]
-                if currentphb.status=="open":
-                    unfinishednode=1
-                    currentphb=self.trace_phase_boundary_v2(currentphb)
-                    self.node_list[i]=currentphb
-                    self.phase_boundary_list.append(np.stack((currentphb.x1mat,currentphb.x2mat,currentphb.Tspace)))
-        f=open("phase_boundary_list.txt","w")
-        print(self.phase_boundary_list,file=f)
-        f.close()
-        utility.replace_word_in_file("phase_boundary_list.txt","array","np.array")          #make the output file that can be directly used by plotter
-        utility.replace_word_in_file("mu_T_list.txt","array","np.array")
-        plotter.plot_phase_diagram_rough(self.phase_boundary_list)
-
-    def compute_phase_diagram_v2(self,Tstart,mustart,muend,phase_diagram_name="phasediagram.png"):
-        #first scan phase boundary starting point
-        placeholder=self.scan_phase_boundary_v2(Tstart,mustart,muend)
-        print("scan finished, now start search")
-        unfinishednode=1
-        while unfinishednode:  
-            unfinishednode=0
-            for i in range(len(self.node_list)):
-                if self.node_list[i].status=="open":
-                    for j in range(len(self.node_list)):
-                        if utility.compare_phb(self.node_list[i],self.node_list[j]):
-                            self.node_list[i].status="exit"
-                    if self.node_list[i].status=="exit":
-                        print("node overlap, move to next node")
-                        continue
-                    unfinishednode=1
-                    self.node_list[i]=self.trace_phase_boundary_v2(self.node_list[i])
-                    phblist=np.stack((self.node_list[i].x1mat,self.node_list[i].x2mat,self.node_list[i].Tspace))
-                    self.phase_boundary_list.append(utility.orderphb(phblist))
-        f=open("phase_boundary_list.txt","w")
-        print(self.phase_boundary_list,file=f)
-        f.close()
-        utility.replace_word_in_file("phase_boundary_list.txt","array","np.array")          #make the output file that can be directly used by plotter
-        plotter.plot_phase_diagram_rough(self.phase_boundary_list)
-
     def plot_phase_diagram0(self,filename):
         for i in range(len(self.phase_boundary_list)):
             listuse=self.phase_boundary_list[i]
@@ -1096,8 +980,7 @@ class FCC(FYLCVM):       #sub class for FCC
                     }
         self.starting_point_list.append(newstartingdict)
     
-    def start_new_phb(self,Tstart,mustart,muend,result1,result2,x1,x2,direction=1):
-        self.node_list.append(utility.phaseboundary(Tstart,mustart,muend,self.identify_phase(result1.x),self.identify_phase(result2.x),x1,x2,direction))
+    def generate
 
     def output_optimization(self,result,T,component_comp,method):
         if method=="brute":

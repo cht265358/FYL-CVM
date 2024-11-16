@@ -31,6 +31,7 @@ class FYLCVM:       #base class for low symmetry structure
         self.local_para=local_parameter
         self.elastic_parameter=elastic_para
         self.starting_point_list=[]
+        self.node_list=[]
         self.phase_boundary_list=[]
         self.mu_Tlist=[]
         self.phb_status_list=[]
@@ -39,8 +40,11 @@ class FYLCVM:       #base class for low symmetry structure
         self.dmuprecise=control_dict['dmuprecise']
         self.dmuscan=control_dict['dmuscan']
         self.dT=control_dict['dT']
+        self.Tmin=control_dict['Tstart']
         self.Tmax=control_dict['Tmax']
         self.mutol=control_dict['mutol']
+        self.mumin=control_dict['mumin']
+        self.mumax=control_dict['mumax']
 
     def map_basic_cluster_energy(self,E):     #map the basic cluster energy to high dimensional array
         self.basicclusterenergy=np.zeros(self.shape)                  #use high dimensional array, input by hand now

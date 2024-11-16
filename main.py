@@ -48,11 +48,18 @@ if __name__ == '__main__':
             myCVM.output_optimization(result,1,composition)
         elif task=="trace":
             dictin={'range': [7.4,7.6], 'T': 1, 'phase': ['L10', 'L12'],'composition':[0.42,0.38]}
-            (newphb,muT,starting_pointnumber)=myCVM.trace_phase_boundary_v1(dictin)
+            phb=utility.phaseboundary(1,7.4,7.6,'L10', 'L12',0.42,0.38)
+            #(newphb,muT,starting_pointnumber)=myCVM.trace_phase_boundary_v1(dictin)
+            newphb=myCVM.trace_phase_boundary_v2(phb)
+            print(phb.x1mat)
+            print(phb.x2mat)
+            print(phb.Tspace)
             #(newphb,muT,starting_pointnumber)=myCVM.trace_phase_boundary(dictin)
-            print(myCVM.starting_point_list)
+            #print(myCVM.starting_point_list)
+            print(len(myCVM.node_list))
         elif task=="compute":
-            myCVM.compute_phase_diagram(control_dict['Tstart'],0,25,inputs.phasediagram_name)
+            #myCVM.compute_phase_diagram(control_dict['Tstart'],0,25,inputs.phasediagram_name)
+            myCVM.compute_phase_diagram_v2(control_dict['Tstart'],5,10,inputs.phasediagram_name)
             #myCVM.compute_phase_diagram(2.6,0,10,inputs.phasediagram_name)
             #print(myCVM.phase_boundary_list)
             #myCVM.plot_phase_diagram0(output_name)
