@@ -198,3 +198,29 @@ def plot_phase_boundary(xt):
     Tspace=np.linspace(xt[1][0],xt[1][-1],1000,endpoint=True)
     plt.plot(phb(Tspace),Tspace,'r')
     #plt.show()
+
+        signallist=np.array([2,0,0,0])
+        print("shell mode, input whatever you want")
+        with open("11.txt", "r") as file1:
+        # Use eval to parse the file content as a Python list with numpy arrays
+            xt = eval(file1.read())
+        plot_phase_diagram(xt,signallist,0.05,1,False,'g')
+        print("check!!!!!!!!!!!!!!!!!!!!!!!!")
+        print(signallist)
+        with open("10.txt", "r") as file2:
+        # Use eval to parse the file content as a Python list with numpy arrays
+            xt2 = eval(file2.read())
+        plot_phase_diagram(xt2,signallist,0.05,1,False,'r')
+        with open("09.txt", "r") as file3:
+        # Use eval to parse the file content as a Python list with numpy arrays
+            xt3 = eval(file3.read())
+        plot_phase_diagram(xt3,signallist,0.05,1,False,'b')
+        plt.xlim(0.1, 0.5)
+        plt.ylim(1, 2.4)
+        plt.xlabel("x")
+        plt.ylabel("normalized T")
+        plt.plot(0,0,color='g',label="r=1.1")
+        plt.plot(0,0,color='r',label="r=1")
+        plt.plot(0,0,color='b',label="r=0.9")
+        plt.legend()
+        plt.show()

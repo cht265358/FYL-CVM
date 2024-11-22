@@ -23,9 +23,9 @@ if __name__ == '__main__':
     print("Welcome to FYL-CVM code")
     warnings.filterwarnings('ignore')
     start_time = time.time()
-    argv=["-t"]
+    #argv=["-t"]
     #argv=["-t","-unit=kj","-vib=1.2"]
-    #argv=["-t","-vib=1"]
+    argv=["-t","-e=4"]
     #inputs=utility.userinput(sys.argv)              
     inputs=utility.userinput(argv)
     inputs.read_input()
@@ -59,7 +59,7 @@ if __name__ == '__main__':
             print(len(myCVM.node_list))
         elif task=="compute":
             #myCVM.compute_phase_diagram(control_dict['Tstart'],0,25,inputs.phasediagram_name)
-            myCVM.compute_phase_diagram_v2(control_dict['Tstart'],5,10,inputs.phasediagram_name)
+            myCVM.compute_phase_diagram_v2(control_dict['Tstart'],0,10,inputs.phasediagram_name)
             #myCVM.compute_phase_diagram(2.6,0,10,inputs.phasediagram_name)
             #print(myCVM.phase_boundary_list)
             #myCVM.plot_phase_diagram0(output_name)

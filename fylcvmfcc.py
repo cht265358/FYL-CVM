@@ -742,7 +742,7 @@ class FCC(FYLCVM):       #sub class for FCC
             currentphase=self.identify_phase(result.x)
             #print("current phase is "+currentphase)
             if currentphase==lowphase:
-                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,self.dmurough,10)
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,self.dmurough,20)
                 if muend==1000:
                     print("phase boundary ends at assigned boundary")
                     phb.status="boundary"
@@ -814,12 +814,12 @@ class FCC(FYLCVM):       #sub class for FCC
             else:   
                 mustartuse=mustart       
                 print("new phase "+currentphase+" detected, start two new search")
-                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,self.dmurough,10)    #one forward and one reverse
+                (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,self.dmurough,20)    #one forward and one reverse
                 print("mustart is "+str(mustart))
                 print("muend is "+str(muend))
                 if muend and muend!=1000:   #edit later for unlikely boundary condition
                     self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
-                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,-self.dmurough,10)
+                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,-self.dmurough,20)
                     if muend and muend!=1000:
                         self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
                         phb.status="exit"
@@ -1055,7 +1055,7 @@ class FCC(FYLCVM):       #sub class for FCC
         utility.replace_word_in_file("mu_T_list.txt","array","np.array")
         plotter.plot_phase_diagram_rough(self.phase_boundary_list)
 
-    def compute_phase_diagram_v2(self,Tstart,mustart,muend,phase_diagram_name="phasediagram.png"):
+    def compute_phase_diagram_v2(self,Tstart,mustart,muend,phase_diagram_name="phasediagram.png",phbfile_name="phase_boundary_list.txt",color='r'):
         #first scan phase boundary starting point
         placeholder=self.scan_phase_boundary_v2(Tstart,mustart,muend)
         print("scan finished, now start search")
@@ -1073,8 +1073,8 @@ class FCC(FYLCVM):       #sub class for FCC
                     unfinishednode=1
                     self.node_list[i]=self.trace_phase_boundary_v2(self.node_list[i])
                     phblist=np.stack((self.node_list[i].x1mat,self.node_list[i].x2mat,self.node_list[i].Tspace))
-                    self.phase_boundary_list.append(utility.orderphb(phblist))
-        f=open("phase_boundary_list.txt","w")
+                    self.phase_boundary_list.append(utility.order_phb(phblist))
+        f=open(phbfile_name,"w")
         print(self.phase_boundary_list,file=f)
         f.close()
         utility.replace_word_in_file("phase_boundary_list.txt","array","np.array")          #make the output file that can be directly used by plotter

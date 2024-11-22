@@ -115,8 +115,8 @@ def compare_phb(phb1,phb2,mutol=0.1,Ttol=0.005):   #phb1 is the phb to be determ
         return 0
 
 def order_phb(phb):
-    if phb[0][1]<phb[0][0]:
-        return np.flip(phb,axis=0)
+    if phb[2][1]<phb[2][0]:
+        return np.flip(phb,axis=1)
     else:
         return phb
     
