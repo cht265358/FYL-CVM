@@ -8,6 +8,9 @@ from scipy.optimize import minimize
 
 #This is the utility function file include all the "dirty" funtions
 
+def delta(i,j):
+    return 1 if i == j else 0
+
 def get_cluster_prob(high_d_matrix,position_type_matrix):     #get cluster probablity from high dimensional matrix
     if np.abs(np.sum(high_d_matrix)-1.0)>0.0001:
         print("error, total probability is not equal to 1 but %f",np.sum(high_d_matrix))

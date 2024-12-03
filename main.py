@@ -23,9 +23,9 @@ if __name__ == '__main__':
     print("Welcome to FYL-CVM code")
     warnings.filterwarnings('ignore')
     start_time = time.time()
-    #argv=["-t"]
+    argv=["-t"]
     #argv=["-t","-unit=kj","-vib=1.2"]
-    argv=["-t","-e=4"]
+    #argv=["-t","-vib=1.1"]
     #inputs=utility.userinput(sys.argv)              
     inputs=utility.userinput(argv)
     inputs.read_input()
@@ -80,13 +80,3 @@ if __name__ == '__main__':
         print("--- %s seconds ---" % (time.time() - start_time))
     elif inputs.shellmode:
         print("shell mode in construction")
-
-'''
-        inputdictionary={
-            "-t":[False,"bool"],
-            "main.py":[True,"bool"],
-            "-c":[2,"int"],
-            "-maxsize":[4,"int"],
-            "-cs":["FCC","string"]
-        }'''
-
