@@ -806,5 +806,10 @@ class FCC(FYLCVM):       #sub class for FCC
     def print_output(self):
         print("hello world")
 
+    def plotGx(self,T,mustart,muend,dmu=0.05):
+        muarr=np.arange(mustart,muend,dmu)
+        for mu in muarr:
+            F,composition,gp,E=self.compute_grand_potential_output()
+
 if __name__ == '__main__':
     print("you are in FYLCVM code?")

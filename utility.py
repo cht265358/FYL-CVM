@@ -23,11 +23,17 @@ def get_cluster_prob(high_d_matrix,position_type_matrix):     #get cluster proba
         for idx in itertools.product(*[range(s) for s in shape]):
             if idx[int(location)]==atom_type:
                 prob+=high_d_matrix[idx]
-    if np.shape(position_type_matrix)[1]==2:     #compute binary cluster probability
+    elif np.shape(position_type_matrix)[1]==2:     #compute binary cluster probability
         location=position_type_matrix[0]
         atom_type=position_type_matrix[1]
         for idx in itertools.product(*[range(s) for s in shape]):
             if idx[int(location[0])]==atom_type[0] and idx[int(location[1])]==atom_type[1]:
+                prob+=high_d_matrix[idx]
+    elif np.shape(position_type_matrix)[1]==3:     #compute binary cluster probability
+        location=position_type_matrix[0]
+        atom_type=position_type_matrix[1]
+        for idx in itertools.product(*[range(s) for s in shape]):
+            if idx[int(location[0])]==atom_type[0] and idx[int(location[1])]==atom_type[1] and idx[int(location[2])]==atom_type[2]:
                 prob+=high_d_matrix[idx]
     return prob
 

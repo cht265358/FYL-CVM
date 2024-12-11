@@ -23,7 +23,7 @@ if __name__ == '__main__':
     print("Welcome to FYL-CVM code")
     warnings.filterwarnings('ignore')
     start_time = time.time()
-    argv=["-t"]
+    argv=["-t","-e=10"]
     #argv=["-t","-unit=kj","-vib=1.2"]
     #argv=["-t","-vib=1.1"]
     #inputs=utility.userinput(sys.argv)              
