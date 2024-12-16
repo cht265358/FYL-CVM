@@ -325,10 +325,11 @@ class FCC(FYLCVM):       #sub class for FCC
         for i,j,k,l in itertools.product(range(self.component), repeat=4):
             E+=self.basicclusterenergy[i][j][k][l]*prob[i][j][k][l]
         
-        total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy-composition[1]*mu
-        F=total_energy-composition[1]*mu
-        entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
-        return total_energy,composition,F,E
+        elastic_energy=self.elastic_parameter*composition[0]*composition[1]
+        grand_potential=2*basic_cluster_energy-two_body_energy+1.25*pointenergy-composition[1]*mu+elastic_energy
+        F=grand_potential+composition[1]*mu
+        entropy=(2*np.sum(self.basicclusterenergy*prob)-F)/T
+        return grand_potential,composition,F,E
     
     def optimize_grand_potential(self,T,mu,method):
         guess=np.array([2,2,2,-1])
@@ -540,7 +541,7 @@ class FCC(FYLCVM):       #sub class for FCC
         count=1
 
         while (self.Tmin<=T<=self.Tmax):
-            T=self.dT*count*phb.direction+phb.Tstart
+            T=round(self.dT*count*phb.direction+phb.Tstart,2)
             mustart+=utility.compute_dmu(phb.muspace)             #edit after compute_dmu() has value
             result=self.optimize_grand_potential(T,mustart,"BFGS_v2")               #try to get rid of this step later
             currentphase=self.identify_phase(result.x)
@@ -808,8 +809,17 @@ class FCC(FYLCVM):       #sub class for FCC
 
     def plotGx(self,T,mustart,muend,dmu=0.05):
         muarr=np.arange(mustart,muend,dmu)
+        Farray=np.array([])
+        xarray=np.array([])
         for mu in muarr:
-            F,composition,gp,E=self.compute_grand_potential_output()
-
+            result=self.optimize_grand_potential(T,mu,"BFGS_v2")
+            GP,composition,F,E=self.compute_grand_potential_output(result.x,T,mu)
+            Farray=np.append(Farray,F)
+            xarray=np.append(xarray,composition[0])
+        plt.scatter(xarray,Farray)
+        plt.show()
+        f=open("gx.txt","w")
+        print(np.vstack((xarray,Farray)),file=f)
+        f.close()
 if __name__ == '__main__':
     print("you are in FYLCVM code?")

@@ -27,7 +27,6 @@ class FYLCVM:       #base class for low symmetry structure
         self.vibrationalenergy=np.zeros(self.shape)
         self.totalenergy=np.zeros(self.shape)
         self.vib_para=vibration_parameter             #vibration parameter with default of 1
-        self.vib_matrix=np.array([1,1,1])
         self.local_para=local_parameter
         self.elastic_parameter=elastic_para
         self.starting_point_list=[]
@@ -45,6 +44,16 @@ class FYLCVM:       #base class for low symmetry structure
         self.mutol=control_dict['mutol']
         self.mumin=control_dict['mumin']
         self.mumax=control_dict['mumax']
+    
+    def update_parameter(self,keyword,value,position=1):
+        if keyword=="e":          #elastic
+            self.elastic_parameter=value
+        elif keyword=="vib":
+            self.vib_para=value
+        elif keyword=="local":
+            self.local_para[position]=value
+        else:
+            print("no parameter to update")
 
     def map_basic_cluster_energy(self,E):     #map the basic cluster energy to high dimensional array
         self.basicclusterenergy=np.zeros(self.shape)                  #use high dimensional array, input by hand now

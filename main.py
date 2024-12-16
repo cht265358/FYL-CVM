@@ -23,14 +23,14 @@ if __name__ == '__main__':
     print("Welcome to FYL-CVM code")
     warnings.filterwarnings('ignore')
     start_time = time.time()
-    argv=["-t","-e=10"]
+    argv=["-shell"]
     #argv=["-t","-unit=kj","-vib=1.2"]
     #argv=["-t","-vib=1.1"]
     #inputs=utility.userinput(sys.argv)              
     inputs=utility.userinput(argv)
     inputs.read_input()
 
-    if inputs.displayhelptext==True:
+    if inputs.displayhelptext:
         utility.displayhelptext()
     control_dict=utility.read_control_variable(inputs.controlfilename,inputs.unituse)
     #test the code
@@ -59,10 +59,7 @@ if __name__ == '__main__':
             print(len(myCVM.node_list))
         elif task=="compute":
             #myCVM.compute_phase_diagram(control_dict['Tstart'],0,25,inputs.phasediagram_name)
-            myCVM.compute_phase_diagram_v2(control_dict['Tstart'],0,10,inputs.phasediagram_name)
-            #myCVM.compute_phase_diagram(2.6,0,10,inputs.phasediagram_name)
-            #print(myCVM.phase_boundary_list)
-            #myCVM.plot_phase_diagram0(output_name)
+            myCVM.compute_phase_diagram_v2(control_dict['Tstart'],0,15,inputs.phasediagram_name)
         elif task=="scatter":
             #myCVM.scan_phase_diagram(control_dict['Tstart'],-75,75)
             myCVM.scan_phase_diagram(1,0,10)
@@ -79,4 +76,24 @@ if __name__ == '__main__':
             print(inputs.phasediagram_name)
         print("--- %s seconds ---" % (time.time() - start_time))
     elif inputs.shellmode:
-        print("shell mode in construction")
+        print("write whatever you want here")
+        myCVM=CVM_loader("FCC",inputs.number_of_component,inputs.max_clustersize,inputs.basic_cluster_energy
+                         ,inputs.vibration_parameter,inputs.local_energy_parameter,inputs.elastic_parameter,control_dict)
+        
+        T=1.2
+        c1mat=np.array([])
+        c2mat=np.array([])
+        for i in range(16):
+            myCVM.update_parameter("e",i)
+        #print(myCVM.elastic_parameter)
+            mustart,muend,c1,c2,Estart,Eend,result,result2=myCVM.search_phase_boundary_v1(T,3,0.5,steps=20)
+            c1mat=np.append(c1mat,min(c1,c2))
+            c2mat=np.append(c2mat,max(c1,c2))
+        name="elastic_c"+str(T)+".txt"
+        f=open(name,"w")
+        print([np.vstack((c1mat,c2mat))],file=f)
+        f.close()
+        utility.replace_word_in_file(name,"array","np.array")      
+        
+        #myCVM.plotGx(1.0,0,25,0.1)
+        print("--- %s seconds ---" % (time.time() - start_time))
