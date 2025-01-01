@@ -76,6 +76,7 @@ if __name__ == '__main__':
             print(inputs.phasediagram_name)
         print("--- %s seconds ---" % (time.time() - start_time))
     elif inputs.shellmode:
+        '''
         print("write whatever you want here")
         myCVM=CVM_loader("FCC",inputs.number_of_component,inputs.max_clustersize,inputs.basic_cluster_energy
                          ,inputs.vibration_parameter,inputs.local_energy_parameter,inputs.elastic_parameter,control_dict)
@@ -93,7 +94,15 @@ if __name__ == '__main__':
         f=open(name,"w")
         print([np.vstack((c1mat,c2mat))],file=f)
         f.close()
-        utility.replace_word_in_file(name,"array","np.array")      
+        utility.replace_word_in_file(name,"array","np.array") '''    
+
+        print("study the effect of local parameter")
+        for i in range(11):
+            utility.edit_local_parameter(2,(1.0+0.01*i))             #update file first
+            inputs.read_cluster_energy()                             #then update input class
+            myCVM=CVM_loader("FCC",inputs.number_of_component,inputs.max_clustersize,inputs.basic_cluster_energy
+                         ,inputs.vibration_parameter,inputs.local_energy_parameter,inputs.elastic_parameter,control_dict)
+            del myCVM
         
         #myCVM.plotGx(1.0,0,25,0.1)
         print("--- %s seconds ---" % (time.time() - start_time))
