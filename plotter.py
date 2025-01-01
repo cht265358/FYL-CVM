@@ -41,12 +41,15 @@ def plot_phase_diagram(phase_boundary_list,signallist,dT,Tstart,filename="phased
     #plt.ylim(1, 2.4)
     if filename:
         plt.savefig(filename)
-    #plt.show()
+    plt.show()
 
 def solve_invariant(x_t1,x_t2,dT,color='r'):
-   T=x_t1[2][-1]+dT*(x_t1[0][-1]-x_t2[0][-1])/(x_t1[0][-2]-x_t2[0][-2])
-   x=0.25*(x_t1[0][-1]+x_t1[1][-1]+x_t2[0][-1]+x_t2[1][-1])
-   print("invariant point estimation is x={:.3f} T={:.2f}".format(x,T))
+   k=((x_t1[0][-1]-x_t2[1][-1])/(x_t1[0][-2]-x_t2[1][-2]))
+   T=x_t1[2][-1]+dT*k**(1.35-0.5*k)
+   #T=1.8525
+   r=0.5*(np.abs((x_t1[0][-1]-x_t1[0][-2])/(x_t2[1][-1]-x_t2[1][-2]))+np.abs((x_t1[1][-1]-x_t1[1][-2])/(x_t2[0][-1]-x_t2[0][-2])))
+   x=x_t1[1][-1]+(r/(r+1))*(x_t2[0][-1]-x_t1[1][-1])
+   print("invariant point estimation is x={:.3f} T={:.4f}".format(x,T))
    point=np.array([[x],[x],[T]])                #solve x based on T later, might need to create one FYLCVM class
    slope1=plot_invariant(x_t1,point,color)
    slope2=plot_invariant(x_t2,point,color)
@@ -149,7 +152,7 @@ def plot_scatter_rough(phblist,filename="scatter.png"):
     plt.show()
 
 if __name__ == '__main__':
-    shell=1
+    shell=0
     if shell:
         signallist=np.array([2,0,0,0])
         print("shell mode, input whatever you want")
@@ -184,5 +187,5 @@ if __name__ == '__main__':
             plot_phase_diagram_rough(xt)
         else:
             signallist=[2,0,0,0]
-            plot_phase_diagram(xt,signallist,0.05,1,'test.png','g')
+            plot_phase_diagram(xt,signallist,0.05,1,'placeholder.png','g')
         
