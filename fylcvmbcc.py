@@ -7,6 +7,7 @@ import itertools
 import utility
 import plotter
 import matplotlib.pyplot as plt
+import freeenergy
 from scipy.optimize import minimize
 from scipy.optimize import brute
 from scipy.optimize import basinhopping
@@ -15,26 +16,36 @@ from matplotlib import cm
 from fylcvm import FYLCVM
 #svm stands for site_variable_matrix
 
-def delta(i,j):
-    return 1 if i == j else 0
+def unequal(i,j):
+    return 1 if i != j else 0
 
 class BCC(FYLCVM):       #sub class for BCC
-    def __init__(self,component,maxsize,E,vibration_parameter,local_parameter,elastic_para,control_dict):                #initialize all variables
-        super().__init__(component,maxsize,E,vibration_parameter,local_parameter,elastic_para,control_dict)
+    def __init__(self,inputs,control_dict):                #initialize all variables
+        super().__init__(inputs,control_dict)
         self.lattice="BCC"
+        #The current code only read from parameter (easier)
+        self.map_basic_cluster_energy(inputs.first_second_bondratio)
 
-    def map_basic_cluster_energy(self,E1,E2):     #for BCC the 4 positions are distinct
-        self.basicclusterenergy=np.zeros(self.shape)                  #use high dimensional array, input by hand now
-        if self.clustersize==4:
-            for i,j,k,l in itertools.product(range(self.component), repeat=4):       #eith use an elegant way or write everything without loop at all
-                self.basicclusterenergy[i][j][k][l]=E1*(delta(i,j)+delta(k,l))+E2*(delta(i,k)+delta(i,l)+delta(j,k)+delta(j,l))
+    def map_basic_cluster_energy(self,E):     #E can be either filename or parametervalue
+        self.basicclusterenergy=np.zeros(self.shape)                  
+        if os.path.exists(str(E)):
+            Edata = np.loadtxt(str(E))
+            #edit later for TO approximation    
+            for i,j,k,l in itertools.product(range(self.component), repeat=4):       
+                self.basicclusterenergy[i][j][k][l]=E[i+k+j+l]
+        else:
+            E1=-1
+            E2=E*E1
+            for i,j,k,l in itertools.product(range(self.component), repeat=4):#for BCC the 4 positions are distinct 
+                self.basicclusterenergy[i][j][k][l]=E2*(unequal(i,j)+unequal(k,l))+E1*(unequal(i,k)+unequal(i,l)+unequal(j,k)+unequal(j,l))
     
     def map_vibrational_energy(self,T):        #Assume symmetry wAA=wBB
-        Fmat=[0,1.5*T*self.R*np.log(self.vib_para*self.local_para[1]),2*T*self.R*np.log(self.vib_para*self.local_para[2])
-              ,1.5*T*self.R*np.log(self.vib_para*self.local_para[3]),0]
+        #Fmat=[0,1.5*T*self.R*np.log(self.vib_para*self.local_para[1]),2*T*self.R*np.log(self.vib_para*self.local_para[2])
+        #      ,1.5*T*self.R*np.log(self.vib_para*self.local_para[3]),0]
         #Fmat=[0,1.5*T*self.R*np.log(self.vib_para),2*T*self.R*np.log(self.vib_para*1.05),1.5*T*self.R*np.log(self.vib_para),0]
         for i,j,k,l in itertools.product(range(self.component), repeat=4):       #eith use an elegant way or write everything without loop at all
-            self.vibrationalenergy[i][j][k][l]=Fmat[i+k+j+l]
+            #self.vibrationalenergy[i][j][k][l]=Fmat[i+k+j+l]
+            self.vibrationalenergy[i][j][k][l]=0
 
     def compute_partition_function(self,svm,T,Fvib):
         partition=0                                #now skip site variable
@@ -50,8 +61,11 @@ class BCC(FYLCVM):       #sub class for BCC
 
     def identify_phase(self,site_potential_input):                           #Figure out D03, B2 and A2 first
         error=1.0e-3
-        x1=site_potential_input[0],x2=site_potential_input[1],x3=site_potential_input[2],x4=site_potential_input[3]
-        x=0.25*(x1+x2+x3+x4)
+        x1=site_potential_input[0]
+        x2=site_potential_input[1]
+        x3=site_potential_input[2]
+        x4=site_potential_input[3]
+        x=0.25*(x1+x2-x3-x4)
         y=0.5*(x3-x4)
         z=0.5*(x1-x2)
         if np.abs(z)<error and np.abs(y)>error:
@@ -60,134 +74,6 @@ class BCC(FYLCVM):       #sub class for BCC
             return "B2"
         elif np.abs(z)<error and np.abs(y)<=error and np.abs(x)<=error:
             return "A2"
-            
-    def compute_total_energy(self,site_variable_input,T,component_comp):    #site_variable_input is 1d for binary for now
-        svm=self.compute_site_variable_matrix(site_variable_input,component_comp,T) 
-        partition=self.compute_partition_function(svm,T,self.vibrationalenergy)
-        prob=self.compute_basic_cluster_prob(partition,svm,T,self.vibrationalenergy)
-
-        if partition<0:
-            #print("negative partition function")
-            return 1000.0
-        #two body cluster
-        two_body_energy=0
-        for i in range(self.clustersize):                 #4*3*2*2 two body cluster
-            for j in range(i+1,self.clustersize):
-                for k,l in itertools.product(range(self.component), repeat=2):     #decorate this line later
-                    position_type_matrix=np.zeros((2,2))
-                    position_type_matrix[0][0]=i
-                    position_type_matrix[0][1]=j
-                    position_type_matrix[1][0]=k
-                    position_type_matrix[1][1]=l
-                    probij=utility.get_cluster_prob(prob,position_type_matrix)
-                    two_body_energy+=probij*np.log(probij)*self.R*T
-        #point cluster  
-        pointenergy=0
-        point_prob=np.zeros((self.component,self.clustersize))
-        for i in range(self.clustersize):
-            for j in range(self.component):
-                position_type_matrix=np.zeros((2,1))
-                position_type_matrix[0][0]=i
-                position_type_matrix[1][0]=j
-                point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
-                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*self.R*T
-        #basic cluster start with tetra as default        
-        basic_cluster_energy=0                           
-        for i in range(self.clustersize):
-            for j in range(self.component):
-                basic_cluster_energy+=self.R*T*(point_prob[j][i]*np.log(svm[j][i]))
-        basic_cluster_energy-=self.R*T*np.log(partition)
-        
-        total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy
-        entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
-        return total_energy
-
-    def compute_total_energy_brute(self,site_variable_input,T,component_comp):    #reduce computational cost for brute method using special function
-        site_variable_input=np.append(site_variable_input,site_variable_input[0])
-        svm=self.compute_site_variable_matrix(site_variable_input,component_comp,T) 
-        partition=self.compute_partition_function(svm,T,self.vibrationalenergy)
-        prob=self.compute_basic_cluster_prob(partition,svm,T,self.vibrationalenergy)
-
-        if partition<0:
-            #print("negative partition function")
-            return 1000.0
-        #two body cluster
-        two_body_energy=0
-        for i in range(self.clustersize):                 #4*3*2*2 two body cluster
-            for j in range(i+1,self.clustersize):
-                for k,l in itertools.product(range(self.component), repeat=2):     #decorate this line later
-                    position_type_matrix=np.zeros((2,2))
-                    position_type_matrix[0][0]=i
-                    position_type_matrix[0][1]=j
-                    position_type_matrix[1][0]=k
-                    position_type_matrix[1][1]=l
-                    probij=utility.get_cluster_prob(prob,position_type_matrix)
-                    two_body_energy+=probij*np.log(probij)*self.R*T
-        #point cluster  
-        pointenergy=0
-        point_prob=np.zeros((self.component,self.clustersize))
-        for i in range(self.clustersize):
-            for j in range(self.component):
-                position_type_matrix=np.zeros((2,1))
-                position_type_matrix[0][0]=i
-                position_type_matrix[1][0]=j
-                point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
-                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*self.R*T
-        #basic cluster start with tetra as default        
-        basic_cluster_energy=0                           
-        for i in range(self.clustersize):
-            for j in range(self.component):
-                basic_cluster_energy+=self.R*T*(point_prob[j][i]*np.log(svm[j][i]))
-        basic_cluster_energy-=self.R*T*np.log(partition)
-        
-        total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy
-        entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
-        return total_energy
-    
-    def compute_total_energy_output(self,site_variable_input,T,component_comp):    #simply repeating the function but allow for more output
-        svm=self.compute_site_variable_matrix(site_variable_input,component_comp,T) 
-        partition=self.compute_partition_function(svm,T,self.vibrationalenergy)
-        prob=self.compute_basic_cluster_prob(partition,svm,T,self.vibrationalenergy)
-
-        if partition<0:
-            return 1000.0
-        #two body cluster
-        two_body_energy=0
-        for i in range(self.clustersize):                 #4*3*2*2 two body cluster
-            for j in range(i+1,self.clustersize):
-                for k,l in itertools.product(range(self.component), repeat=2):     #decorate this line later
-                    position_type_matrix=np.zeros((2,2))
-                    position_type_matrix[0][0]=i
-                    position_type_matrix[0][1]=j
-                    position_type_matrix[1][0]=k
-                    position_type_matrix[1][1]=l
-                    probij=utility.get_cluster_prob(prob,position_type_matrix)
-                    two_body_energy+=probij*np.log(probij)*self.R*T
-        #point cluster  
-        pointenergy=0
-        point_prob=np.zeros((self.component,self.clustersize))
-        for i in range(self.clustersize):
-            for j in range(self.component):
-                position_type_matrix=np.zeros((2,1))
-                position_type_matrix[0][0]=i
-                position_type_matrix[1][0]=j
-                point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
-                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*self.R*T
-        #basic cluster start with tetra as default        
-        basic_cluster_energy=0                           
-        for i in range(self.clustersize):
-            for j in range(self.component):
-                basic_cluster_energy+=self.R*T*(point_prob[j][i]*np.log(svm[j][i]))
-        basic_cluster_energy-=self.R*T*np.log(partition)
-        
-        total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy
-        entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
-        mu=0
-        for i,j,k,l in itertools.product(range(self.component), repeat=4):
-            product=svm[i][0]*svm[j][1]*svm[k][2]*svm[l][3]
-            mu+=product*np.log(product)*np.exp(self.basicclusterenergy[i][j][k][l])*T
-
-        return total_energy,entropy,mu/partition
 
     def compute_grand_potential(self,site_potential_input,T,mu):    #compute the grand cononical potential
         self.map_vibrational_energy(T)
@@ -199,40 +85,26 @@ class BCC(FYLCVM):       #sub class for BCC
 
         if partition<0:
             return 1000.0
+        
+        three_body_energy=freeenergy.compute_ternary_cluster_energy(prob,"BCC")*self.R*T
+        two_body_energy=freeenergy.compute_binary_cluster_energy(prob,"BCC")*self.R*T
+        pointenergy,point_prob=freeenergy.compute_point_cluster_energy(prob,"BCC")
+        pointenergy=pointenergy*self.R*T
 
-        two_body_energy=0
-        for i in range(self.clustersize):                 #4*3*2*2 two body cluster
-            for j in range(i+1,self.clustersize):
-                for k,l in itertools.product(range(self.component), repeat=2):     #decorate this line later
-                    position_type_matrix=np.zeros((2,2))
-                    position_type_matrix[0][0]=i
-                    position_type_matrix[0][1]=j
-                    position_type_matrix[1][0]=k
-                    position_type_matrix[1][1]=l
-                    probij=utility.get_cluster_prob(prob,position_type_matrix)
-                    two_body_energy+=probij*np.log(probij)*self.R*T
-        #point cluster  
-        pointenergy=0
-        point_prob=np.zeros((self.component,self.clustersize))
         composition=np.zeros(self.component)
-        for i in range(self.clustersize):
-            for j in range(self.component):
-                position_type_matrix=np.zeros((2,1))
-                position_type_matrix[0][0]=i
-                position_type_matrix[1][0]=j
-                point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
-                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*self.R*T
-                composition[j]+=point_prob[j][i]*0.25
-        #basic cluster start with tetra as default        
         basic_cluster_energy=0                           
         for i in range(self.clustersize):
             for j in range(self.component):
+                composition[j]+=point_prob[j][i]*0.25
                 basic_cluster_energy+=point_prob[j][i]*spm[j][i]
         basic_cluster_energy-=self.R*T*np.log(partition)
         elastic_energy=self.elastic_parameter*composition[0]*composition[1]
         
-        total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy-composition[1]*mu+elastic_energy
-        entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
+        total_energy=6*basic_cluster_energy+three_body_energy+two_body_energy+pointenergy-composition[1]*mu+elastic_energy
+        #entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
+        #print("energy is "+str(total_energy)+" and para is "+str(site_potential_input))
+        #print("basic energy is "+str(6*basic_cluster_energy)+" point energy "+str(pointenergy)+" binary energy "+str(two_body_energy)+"ternary energy "+str(three_body_energy))
+        #print("composition is "+str(composition[0]))
         return total_energy
     
     def compute_grand_potential_output(self,site_potential_input,T,mu):    #compute the grand cononical potential
@@ -246,151 +118,49 @@ class BCC(FYLCVM):       #sub class for BCC
         if partition<0:
             return 1000.0
 
-        two_body_energy=0
-        for i in range(self.clustersize):                 #4*3*2*2 two body cluster
-            for j in range(i+1,self.clustersize):
-                for k,l in itertools.product(range(self.component), repeat=2):     #decorate this line later
-                    position_type_matrix=np.zeros((2,2))
-                    position_type_matrix[0][0]=i
-                    position_type_matrix[0][1]=j
-                    position_type_matrix[1][0]=k
-                    position_type_matrix[1][1]=l
-                    probij=utility.get_cluster_prob(prob,position_type_matrix)
-                    two_body_energy+=probij*np.log(probij)*T*self.R
-        #point cluster  
-        pointenergy=0
-        xb=0
-        point_prob=np.zeros((self.component,self.clustersize))
+        three_body_energy=freeenergy.compute_binary_cluster_energy(prob,"BCC")*self.R*T
+        two_body_energy=freeenergy.compute_binary_cluster_energy(prob,"BCC")*self.R*T
+        pointenergy,point_prob=freeenergy.compute_point_cluster_energy(prob,"BCC")
+        pointenergy=pointenergy*self.R*T
+
         composition=np.zeros(self.component)
-        for i in range(self.clustersize):
-            for j in range(self.component):
-                position_type_matrix=np.zeros((2,1))
-                position_type_matrix[0][0]=i
-                position_type_matrix[1][0]=j
-                point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
-                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*T*self.R
-                composition[j]+=point_prob[j][i]*0.25
-        #basic cluster start with tetra as default        
         basic_cluster_energy=0                           
         for i in range(self.clustersize):
             for j in range(self.component):
+                composition[j]+=point_prob[j][i]*0.25
                 basic_cluster_energy+=point_prob[j][i]*spm[j][i]
-        basic_cluster_energy-=T*self.R*np.log(partition)
-
-        E=0
-        for i,j,k,l in itertools.product(range(self.component), repeat=4):
-            E+=self.basicclusterenergy[i][j][k][l]*prob[i][j][k][l]
+        basic_cluster_energy-=self.R*T*np.log(partition)
+        elastic_energy=self.elastic_parameter*composition[0]*composition[1]
         
-        total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy-composition[1]*mu
+        total_energy=6*basic_cluster_energy+three_body_energy+two_body_energy+pointenergy-composition[1]*mu+elastic_energy
         F=total_energy-composition[1]*mu
         entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
-        return total_energy,composition,F,E
+        return total_energy,composition,F,0
     
     def optimize_grand_potential(self,T,mu,method):
-        guess=np.array([2,2,2,-1])
-        if method=="NM":
-            initial_guess2=np.array([[0,0,0,0],[5,5,5,0],[5,5,0,5],[5,0,5,5],[0,5,5,5]])
-            options={
-                'initial_simplex':initial_guess2,
-                'fatol':1.0e-8,
-                'xatol':1.0e-6
-            }
-            positive=((-10,10),(-10,10),(-10,10),(-10,10))
-            #result=minimize(CVM.compute_total_energy,guess,method='Nelder-Mead',args=(T,component_comp),bounds=positive,tol=1.0e-6)
-            result=minimize(self.compute_grand_potential,guess,method='Nelder-Mead',options=options,args=(T,mu),bounds=positive)
-        elif method=="basinhopping":
-            minimizer_kwargs={"args":(T,mu)}
-            result=basinhopping(self.compute_grand_potential,guess,minimizer_kwargs=minimizer_kwargs)
-        elif method=="BFGS":
-            A1_1=np.array([0,0,0,0])
-            A1_2=np.array([20,20,20,20])
-            A1_3=np.array([-20,-20,-20,-20])
-            L12_1=np.array([-10,-10,-10,10])
-            L12_2=np.array([3,3,3,-1.6])
-            L12_3=np.array([10,10,10,-10])
-            L10_1=np.array([15,15,-15,-15])   
-            L10_2=np.array([-15,-15,15,15])  
-            L10_2=np.array([5,5,-5,-5])
-            L10_2=np.array([-5,-5,5,5]) 
-            guesslist=(A1_1,A1_2,A1_3,L12_1,L12_2,L12_3,L10_1,L10_2)
-            #result=minimize(self.compute_grand_potential,guess,method='BFGS',args=(T,mu))
-            result=self.multiBFGS(guesslist,(T,mu))
-        elif method=="BFGS_v2":
-            '''guess_1=np.array([5,-5])
-            guess_2=np.array([-5,5])
-            L10_1=np.array([15,-15,])   
-            L10_2=np.array([-15,15,])'''
+        if method=="BFGS_v2":
             guess_1=np.array([2,-1])
             guess_2=np.array([-1,2])
-            L10_1=np.array([5,-5,])   
-            L10_2=np.array([-5,5,])
-            guesslist=(guess_1,guess_2,L10_1,L10_2)  
+            l10_1=np.array([0,0,])   
+            l10_2=np.array([-5,5,])
+            guesslist=(guess_1,guess_2,l10_1,l10_2)  
             result,phase=self.multiBFGS_v2(guesslist,(T,mu))
             result.x=utility.map_variable_to_phase(result.x,phase,self.clustersize)         #change later if everything works perfectly, return result.x with size 4
             #print("at potential mu="+str(mu)+" best phase is "+self.identify_phase(result.x))
+        else:
+            sys.exit("Error: Optimization method can't be found")
         return result
-    
-    def plot_potential_surface(self,T,mu,phase):
-        print("plot the potential surface based on brute force plot result")
-        if phase=="A1":
-            boundary=[slice(-10,10,0.02)]
-        else:
-            boundary=(slice(-50,50,0.2),slice(-50,50,0.2))
-        result=brute(self.brute_minimizer,boundary,args=(T,mu,phase),workers=-1,full_output=True,finish=None)
-        print("minimal is at "+str(result[0])+" minimal value is "+str(result[1]))
-        if phase=="A1":
-            fig, ax = plt.subplots(subplot_kw={})
-            ax.plot(result[2],result[3])
-        else:
-            fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-            surf = ax.plot_surface((result[2])[0],(result[2])[1],result[3],linewidth=0, cmap=cm.coolwarm,antialiased=False)
-        ax.set_title("potential surface with mu="+str(mu)+" at T="+str(T)+" for phase "+phase)
-        fig.savefig("mu="+str(mu)+"_"+phase)
-    
-    def brute_minimizer(self,input_variable,T,mu,phase):
-        site_potential_input=np.zeros(self.clustersize)
-        if phase=="A1":
-            for i in range(self.clustersize):site_potential_input[i]=input_variable[0] 
-        elif phase=="L12":
-            site_potential_input[0]=site_potential_input[1]=site_potential_input[2]=input_variable[0]
-            site_potential_input[3]=input_variable[1]
-        elif phase=="L10":
-            site_potential_input[0]=site_potential_input[1]=input_variable[0]
-            site_potential_input[2]=site_potential_input[3]=input_variable[1]
-        return self.compute_grand_potential(site_potential_input,T,mu)
-    
-    def multiBFGS(self,guesslist,args,space="mu"):             #input two tuple
-        Fmin=1000
-        argslist=[args]*len(guesslist)
-        inputlist=zip(guesslist,argslist)
-        if space=="mu":
-            with Pool(processes=8) as pool:
-                resultlist=pool.starmap(self.minimizermu,inputlist)
-                pool.close()
-        else:
-            with Pool(processes=8) as pool:
-                resultlist=pool.starmap(self.minimizerx,inputlist)
-                pool.close()
-
-        for result in resultlist:
-            #print("free energy is "+str(result.fun)+" site variable is "+str(result.x))
-            if result.fun<Fmin:
-                if space!="mu" or self.identify_phase(result.x)!="L12+L10":                   #ignore L12+L10 for now
-                    Fmin=result.fun
-                    bestresult=result
-        return bestresult
     
     def multiBFGS_v2(self,guesslist,args):             #input two tuple
         Fmin=10
-        argsL12=args+("L12",)
-        argsL10=args+("L10",)
-        argslist=(argsL12,argsL12,argsL12,argsL12,argsL10,argsL10,argsL10,argsL10)
+        argsB2=args+("B2",)
+        argslist=(argsB2,argsB2,argsB2,argsB2)
         #print(argslist)
         #longguesslist=guesslist*2
         #print(longguesslist)
-        inputlist=zip(guesslist*2,argslist)
+        inputlist=zip(guesslist,argslist)               #start with A2 B2 first
 
-        with Pool(processes=8) as pool:
+        with Pool(processes=8) as pool:              #remember to add this back later!!
             resultlist=pool.starmap(self.minimizerv2,inputlist)
             pool.close()
 
@@ -402,77 +172,23 @@ class BCC(FYLCVM):       #sub class for BCC
                 phase=result[1]
         
         return bestresult,phase
-    
-    def minimizermu(self,initialvalue,args,method='BFGS'):      #use a minimizer that can be called by pool.starmap
-        result=minimize(self.compute_grand_potential,initialvalue,method=method,args=args)
-        return result
-    
-    def minimizerv2_L12(self,initialvalue,args,method='BFGS'):      #reduce number of variables
-        result=minimize(self.potential_computerv2_L12,initialvalue,method=method,args=args)
-        return result
 
     def minimizerv2(self,initialvalue,args,method='BFGS'):      #return phase
         result=minimize(self.potential_computerv2,initialvalue,method=method,args=args)
         return result,args[2]
-    
-    def minimizerv2_L10(self,initialvalue,args,method='BFGS'):      #reduce number of variables
-        print("check if minimizer is runned")
-        result=minimize(self.potential_computerv2_L10,initialvalue,method=method,args=args)
-        return result
 
     def potential_computerv2(self,initialvalue,T,mu,phase):
         sitepotential_input=np.zeros(self.clustersize)
-        if phase=="L12":
-            sitepotential_input[0]=sitepotential_input[1]=sitepotential_input[2]=initialvalue[0]
-            sitepotential_input[3]=initialvalue[1]
-        elif phase=="L10":
+        if phase=="B2":
             sitepotential_input[0]=sitepotential_input[1]=initialvalue[0]
             sitepotential_input[2]=sitepotential_input[3]=initialvalue[1]
+        elif phase=="D03":
+            sitepotential_input[0]=sitepotential_input[1]=initialvalue[0]
+            sitepotential_input[2]=initialvalue[1]
+            sitepotential_input[3]=initialvalue[2]
+        else:
+            sys.exit("Phase can't be identified")
         return self.compute_grand_potential(sitepotential_input,T,mu)
-        
-    def potential_computerv2_L12(self,initialvalue,T,mu):
-        sitepotential_input=np.zeros(self.clustersize)
-        sitepotential_input[0]=sitepotential_input[1]=sitepotential_input[2]=initialvalue[0]
-        sitepotential_input[3]=initialvalue[1]
-        return self.compute_grand_potential(sitepotential_input,T,mu)
-
-    def potential_computerv2_L10(self,initialvalue,T,mu):    
-        sitepotential_input=np.zeros(self.clustersize)
-        sitepotential_input[0]=sitepotential_input[1]=initialvalue[0]
-        sitepotential_input[2]=sitepotential_input[3]=initialvalue[1]
-        return self.compute_grand_potential(sitepotential_input,T,mu)
-
-    def minimizerx(self,initialvalue,args,method='BFGS'):      #use a minimizer that can be called by pool.starmap
-        result=minimize(self.compute_total_energy,initialvalue,method=method,args=args)
-        return result   
-
-    def optimize_free_energy(self,T,component_comp,method):         #main optimization function, optimize site variables at given T and composition
-        guess=np.array([2.26,2.26,-1.84])
-        #initial_guess=np.ones((self.clustersize-1)*(self.component-1))
-        if method=="NM":
-            initial_guess2=np.array([[5,5,-2],[5,5,-1],[4,4,0],[4,4,-1]])
-            options={
-                'initial_simplex':initial_guess2
-            }
-            positive=((-10,10),(-10,10),(-10,10))
-            #result=minimize(CVM.compute_total_energy,guess,method='Nelder-Mead',args=(T,component_comp),bounds=positive,tol=1.0e-6)
-            result=minimize(self.compute_total_energy,guess,method='Nelder-Mead',options=options,args=(T,component_comp),bounds=positive,tol=1.0e-6)
-        elif method=="basinhopping":
-            minimizer_kwargs={"args":(T,component_comp)}
-            result=basinhopping(self.compute_total_energy,guess,minimizer_kwargs=minimizer_kwargs)
-        elif method=="brute":
-            boundary=(slice(-10,10,0.02),slice(-10,10,0.02))
-            result=brute(self.compute_total_energy_brute,boundary,args=(T,component_comp),workers=-1,full_output=False)
-        elif method=="BFGS":
-            A1_1=np.array([2.5,2.5,2.5])
-            A1_2=np.array([0,0,0])
-            L12_1=np.array([3.2,3.2,-1])
-            L10_1=np.array([3.5,3.5,-0.5])   
-            guesslist=(A1_1,A1_2,L12_1,L10_1)
-            #result=minimize(self.compute_grand_potential,guess,method='BFGS',args=(T,mu))
-            result=self.multiBFGS(guesslist,(T,component_comp),"x")
-
-        return result
     
     def find_phase_boundary(self,Tstart,Tstop,composition,method="BFGS"):
         T=Tstart
@@ -500,7 +216,7 @@ class BCC(FYLCVM):       #sub class for BCC
             mustart+=utility.compute_dmu(phb.muspace)             #edit after compute_dmu() has value
             result=self.optimize_grand_potential(T,mustart,"BFGS_v2")               #try to get rid of this step later
             currentphase=self.identify_phase(result.x)
-            #print("current phase is "+currentphase)
+            print("current phase is "+currentphase)
             if currentphase==lowphase:
                 (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,self.dmurough,20)
                 if muend==1000:
@@ -632,10 +348,11 @@ class BCC(FYLCVM):       #sub class for BCC
             if muuse>self.mumax or muuse<self.mumin:
                 print("boundary encountered")
                 return False,1000,False,False,False,False,False,False
-            result=self.optimize_grand_potential(T,muuse,"BFGS_v2")  
-            #print("current phase is "+str(self.identify_phase(result.x))+" at potential "+str(muuse)+" para is "+str(result.x))
+            result=self.optimize_grand_potential(T,muuse,"BFGS_v2") 
+            print("current phase is "+str(self.identify_phase(result.x))+" at potential "+str(muuse)+" para is "+str(result.x)+" T is "+str(T))
             (potential,composition,F,E)=self.compute_grand_potential_output(result.x,T,muuse)
             cdata[i]=composition[0]
+            print("current composition is "+str(composition[0]))
             currentphase=self.identify_phase(result.x)
             if i>0:
                 if currentphase!=phasesave:

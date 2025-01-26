@@ -5,27 +5,28 @@ import os
 import sys
 from fylcvm import FYLCVM
 from fylcvmfcc import FCC
+from fylcvmbcc import BCC
 import utility
 import time
 import warnings
 
-def CVM_loader(structure,number_of_component,max_clustersize,basic_cluster_energy,vibration_parameter,local_energy_parameter,elastic_parameter,control_dict):
+def CVM_loader(structure,inputs,control_dict):
     #need a function that detects all existing methods
     crystal_structures={
         "fcc":FCC,
-        #"bcc":BCC,
+        "bcc":BCC,
         "triclinic":FYLCVM
     }
     myCVM=crystal_structures.get(structure.lower(),FYLCVM)
-    return myCVM(number_of_component,max_clustersize,basic_cluster_energy,vibration_parameter,local_energy_parameter,elastic_parameter,control_dict)
+    return myCVM(inputs,control_dict)
 
 if __name__ == '__main__':
     print("Welcome to FYL-CVM code")
     warnings.filterwarnings('ignore')
     start_time = time.time()
-    argv=["-shell"]
+    #argv=["-t","-unit=kj","-basic=real.in"]
     #argv=["-t","-unit=kj","-vib=1.2"]
-    #argv=["-t","-vib=1.1"]
+    argv=["-t","-e12=0.0","-unit=bcc"]
     #inputs=utility.userinput(sys.argv)              
     inputs=utility.userinput(argv)
     inputs.read_input()
@@ -39,27 +40,11 @@ if __name__ == '__main__':
         composition=[0.38225,0.61775]
     
         print("code test mod")
-        myCVM=CVM_loader("FCC",inputs.number_of_component,inputs.max_clustersize,inputs.basic_cluster_energy
-                         ,inputs.vibration_parameter,inputs.local_energy_parameter,inputs.elastic_parameter,control_dict)
-        #myCVM=FYLCVM(inputs.number_of_component,inputs.max_clustersize,inputs.basic_cluster_energy,inputs.vibration_parameter,inputs.local_energy_parameter,inputs.elastic_parameter,control_dict)                                #maybe considering using a class creator later
-        if task=="point":
-            print("compute the energy of given point")
-            result=myCVM.optimize_free_energy(1,composition,"basinhopping")
-            myCVM.output_optimization(result,1,composition)
-        elif task=="trace":
-            dictin={'range': [7.4,7.6], 'T': 1, 'phase': ['L10', 'L12'],'composition':[0.42,0.38]}
-            phb=utility.phaseboundary(1,7.4,7.6,'L10', 'L12',0.42,0.38)
-            #(newphb,muT,starting_pointnumber)=myCVM.trace_phase_boundary_v1(dictin)
-            newphb=myCVM.trace_phase_boundary_v2(phb)
-            print(phb.x1mat)
-            print(phb.x2mat)
-            print(phb.Tspace)
-            #(newphb,muT,starting_pointnumber)=myCVM.trace_phase_boundary(dictin)
-            #print(myCVM.starting_point_list)
-            print(len(myCVM.node_list))
-        elif task=="compute":
+        myCVM=CVM_loader("BCC",inputs,control_dict)
+
+        if task=="compute":
             #myCVM.compute_phase_diagram(control_dict['Tstart'],0,25,inputs.phasediagram_name)
-            myCVM.compute_phase_diagram_v2(control_dict['Tstart'],0,15,inputs.phasediagram_name)
+            myCVM.compute_phase_diagram_v2(control_dict['Tstart'],0,100,inputs.phasediagram_name)
         elif task=="scatter":
             #myCVM.scan_phase_diagram(control_dict['Tstart'],-75,75)
             myCVM.scan_phase_diagram(1,0,10)
@@ -67,13 +52,14 @@ if __name__ == '__main__':
             myCVM.scan_phase_boundary(1,0,10)
         elif task=="find":
             myCVM.find_phase_boundary(500,900,[0.5,0.5],"brute")
-        elif task=="brute":
-            inputlist=[(10,-20,"L10"),(10,-10,"L10"),(10,0,"L12"),(10,10,"L12")]
-            for inputvalue in inputlist:
-                myCVM.plot_potential_surface(inputvalue[0],inputvalue[1],inputvalue[2])
+        elif task=="area":
+            #mu is between 24.23 and 24.25 composition is between 0.408 and 0.389 at T=500.00
+            Trange=np.array([490,520])
+            murange=np.array([23,45])
+            myCVM.plot_point_region(Trange,murange,5,0.1)
         elif task=="test":
             print("just check if input is correct")
-            print(inputs.phasediagram_name)
+            print(myCVM.basicclusterenergy)
         print("--- %s seconds ---" % (time.time() - start_time))
     elif inputs.shellmode:
         '''
@@ -95,13 +81,27 @@ if __name__ == '__main__':
         print([np.vstack((c1mat,c2mat))],file=f)
         f.close()
         utility.replace_word_in_file(name,"array","np.array") '''    
-
+        #work on Jan 2nd
+        '''
         print("study the effect of local parameter")
-        for i in range(11):
-            utility.edit_local_parameter(2,(1.0+0.01*i))             #update file first
+        for i in range(3):
+            p=1.05+0.02*i
+            name="local"+str(round(p,2))+".txt"
+            phasediagram_name="local"+str(round(p,2))+".png"
+            utility.edit_local_parameter(2,p)             #update file first
             inputs.read_cluster_energy()                             #then update input class
             myCVM=CVM_loader("FCC",inputs.number_of_component,inputs.max_clustersize,inputs.basic_cluster_energy
                          ,inputs.vibration_parameter,inputs.local_energy_parameter,inputs.elastic_parameter,control_dict)
+            myCVM.compute_phase_diagram_v2(control_dict['Tstart'],0,15,phasediagram_name,name)
+            del myCVM'''
+        #work on Jan 3rd
+        print("study the effect of elastic parameter")
+        for i in range(1,15):
+            phasediagram_name="elastic"+str(i)+".png"
+            name="elastic"+str(i)+".txt"
+            myCVM=CVM_loader("FCC",inputs,control_dict)
+            myCVM.update_parameter("e",i)
+            myCVM.compute_phase_diagram_v2(control_dict['Tstart'],0,10,phasediagram_name,name)
             del myCVM
         
         #myCVM.plotGx(1.0,0,25,0.1)

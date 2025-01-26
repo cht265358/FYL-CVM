@@ -15,20 +15,20 @@ from matplotlib import cm
 #svm stands for site_variable_matrix
 
 class FYLCVM:       #base class for low symmetry structure
-    def __init__(self,component,maxsize,E,vibration_parameter,local_parameter,elastic_para,control_dict):                #initialize all variables
+    def __init__(self,inputs,control_dict):                #initialize all variables
         #print("Initialize FYL-CVM\n")
         kB=1.380649e-23  #boltzman constant, unit:J/K
         N=6.02e23;       #number of particles, the size of the system, here we use 1 mole
         self.lattice="monoclinic"
-        self.component=component
-        self.clustersize=maxsize
+        self.component=inputs.number_of_component
+        self.clustersize=inputs.max_clustersize
         self.shape=[self.component]*self.clustersize    #ignore using basic cluster with different size first
-        self.map_basic_cluster_energy(E)
+        #self.map_basic_cluster_energy(E)
         self.vibrationalenergy=np.zeros(self.shape)
         self.totalenergy=np.zeros(self.shape)
-        self.vib_para=vibration_parameter             #vibration parameter with default of 1
-        self.local_para=local_parameter
-        self.elastic_parameter=elastic_para
+        self.vib_para=inputs.vibration_parameter             #vibration parameter with default of 1
+        #self.local_para=inputs.local_energy_parameter
+        self.elastic_parameter=inputs.elastic_parameter
         self.starting_point_list=[]
         self.node_list=[]
         self.phase_boundary_list=[]
@@ -114,10 +114,6 @@ class FYLCVM:       #base class for low symmetry structure
             for i,j,k,l in itertools.product(range(self.component), repeat=4):
                 basic_cluster_prob[i][j][k][l]=np.exp((svm[i][0]+svm[j][1]+svm[k][2]+svm[l][3]-self.basicclusterenergy[i][j][k][l]-Fvib[i][j][k][l])/(self.R*T))/partition
         return basic_cluster_prob
-    
-    def compute_additional_energy(self,vibrational,elastic,electronic):     #vibrational contains the ratio
-        if vibrational:
-            print("helloworld")
 
     def identify_phase(self,site_potential_input):                           #identify which phase is showing up
         count=0

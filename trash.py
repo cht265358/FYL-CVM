@@ -224,3 +224,177 @@ def plot_phase_boundary(xt):
         plt.plot(0,0,color='b',label="r=0.9")
         plt.legend()
         plt.show()
+    
+
+
+
+def compute_ternary_cluster_energy(np.ndarray[DTYPE_t, ndim=4] prob, str lattice="BCC"):
+    cdef DTYPE_t para
+    if lattice == "BCC":
+        para = -3.0
+    else:
+        para = 0.0
+
+    cdef DTYPE_t abc000, abc001, abc010, abc011, abc100, abc101, abc110, abc111
+    cdef DTYPE_t abd000, abd001, abd010, abd011, abd100, abd101, abd110, abd111
+    cdef DTYPE_t acd000, acd001, acd010, acd011, acd100, acd101, acd110, acd111
+    cdef DTYPE_t bcd000, bcd001, bcd010, bcd011, bcd100, bcd101, bcd110, bcd111
+
+    # Compute sums
+    abc000 = prob[0, 0, 0, 0] + prob[0, 0, 0, 1]
+    abc001 = prob[0, 0, 1, 0] + prob[0, 0, 1, 1]
+    abc010 = prob[0, 1, 0, 0] + prob[0, 1, 0, 1]
+    abc011 = prob[0, 1, 1, 0] + prob[0, 1, 1, 1]
+    abc100 = prob[1, 0, 0, 0] + prob[1, 0, 0, 1]
+    abc101 = prob[1, 0, 1, 0] + prob[1, 0, 1, 1]
+    abc110 = prob[1, 1, 0, 0] + prob[1, 1, 0, 1]
+    abc111 = prob[1, 1, 1, 0] + prob[1, 1, 1, 1]
+
+    abd000 = prob[0, 0, 0, 0] + prob[0, 0, 1, 0]
+    abd001 = prob[0, 0, 0, 1] + prob[0, 0, 1, 1]
+    abd010 = prob[0, 1, 0, 0] + prob[0, 1, 1, 0]
+    abd011 = prob[0, 1, 0, 1] + prob[0, 1, 1, 1]
+    abd100 = prob[1, 0, 0, 0] + prob[1, 0, 1, 0]
+    abd101 = prob[1, 0, 0, 1] + prob[1, 0, 1, 1]
+    abd110 = prob[1, 1, 0, 0] + prob[1, 1, 1, 0]
+    abd111 = prob[1, 1, 0, 1] + prob[1, 1, 1, 1]
+
+    acd000 = prob[0, 0, 0, 0] + prob[0, 1, 0, 0]
+    acd001 = prob[0, 0, 0, 1] + prob[0, 1, 0, 1]
+    acd010 = prob[0, 0, 1, 0] + prob[0, 1, 1, 0]
+    acd011 = prob[0, 0, 1, 1] + prob[0, 1, 1, 1]
+    acd100 = prob[1, 0, 0, 0] + prob[1, 1, 0, 0]
+    acd101 = prob[1, 0, 0, 1] + prob[1, 1, 0, 1]
+    acd110 = prob[1, 0, 1, 0] + prob[1, 1, 1, 0]
+    acd111 = prob[1, 0, 1, 1] + prob[1, 1, 1, 1]
+
+    bcd000 = prob[0, 0, 0, 0] + prob[1, 0, 0, 0]
+    bcd001 = prob[0, 0, 0, 1] + prob[1, 0, 0, 1]
+    bcd010 = prob[0, 0, 1, 0] + prob[1, 0, 1, 0]
+    bcd011 = prob[0, 0, 1, 1] + prob[1, 0, 1, 1]
+    bcd100 = prob[0, 1, 0, 0] + prob[1, 1, 0, 0]
+    bcd101 = prob[0, 1, 0, 1] + prob[1, 1, 0, 1]
+    bcd110 = prob[0, 1, 1, 0] + prob[1, 1, 1, 0]
+    bcd111 = prob[0, 1, 1, 1] + prob[1, 1, 1, 1]
+
+    # Compute the sum of x * log(x) for each term
+    cdef DTYPE_t result = (
+        abc000 * np.log(abc000) + abc001 * np.log(abc001) + abc010 * np.log(abc010) + abc011 * np.log(abc011) +
+        abc100 * np.log(abc100) + abc101 * np.log(abc101) + abc110 * np.log(abc110) + abc111 * np.log(abc111) +
+        abd000 * np.log(abd000) + abd001 * np.log(abd001) + abd010 * np.log(abd010) + abd011 * np.log(abd011) +
+        abd100 * np.log(abd100) + abd101 * np.log(abd101) + abd110 * np.log(abd110) + abd111 * np.log(abd111) +
+        acd000 * np.log(acd000) + acd001 * np.log(acd001) + acd010 * np.log(acd010) + acd011 * np.log(acd011) +
+        acd100 * np.log(acd100) + acd101 * np.log(acd101) + acd110 * np.log(acd110) + acd111 * np.log(acd111) +
+        bcd000 * np.log(bcd000) + bcd001 * np.log(bcd001) + bcd010 * np.log(bcd010) + bcd011 * np.log(bcd011) +
+        bcd100 * np.log(bcd100) + bcd101 * np.log(bcd101) + bcd110 * np.log(bcd110) + bcd111 * np.log(bcd111)
+    )
+
+    return result * para
+
+def compute_binary_cluster_energy(np.ndarray[DTYPE_t, ndim=4] prob, str lattice="BCC"):
+    cdef np.ndarray[DTYPE_t, ndim=1] para
+    if lattice == "BCC":
+        para = np.array([1.5, 1], dtype=DTYPE)
+    elif lattice == "FCC":
+        para = np.array([-1, -1], dtype=DTYPE)
+    else:
+        raise ValueError("Invalid lattice type. Choose 'BCC' or 'FCC'.")
+
+    cdef DTYPE_t ab00, ab01, ab10, ab11
+    cdef DTYPE_t ac00, ac01, ac10, ac11
+    cdef DTYPE_t ad00, ad01, ad10, ad11
+    cdef DTYPE_t bc00, bc01, bc10, bc11
+    cdef DTYPE_t bd00, bd01, bd10, bd11
+    cdef DTYPE_t cd00, cd01, cd10, cd11
+
+    # Compute sums
+    ab00 = prob[0, 0, 0, 0] + prob[0, 0, 0, 1] + prob[0, 0, 1, 0] + prob[0, 0, 1, 1]
+    ab01 = prob[0, 1, 0, 0] + prob[0, 1, 0, 1] + prob[0, 1, 1, 0] + prob[0, 1, 1, 1]
+    ab10 = prob[1, 0, 0, 0] + prob[1, 0, 0, 1] + prob[1, 0, 1, 0] + prob[1, 0, 1, 1]
+    ab11 = prob[1, 1, 0, 0] + prob[1, 1, 0, 1] + prob[1, 1, 1, 0] + prob[1, 1, 1, 1]
+
+    ac00 = prob[0, 0, 0, 0] + prob[0, 0, 0, 1] + prob[0, 1, 0, 0] + prob[0, 1, 0, 1]
+    ac01 = prob[0, 0, 1, 0] + prob[0, 0, 1, 1] + prob[0, 1, 1, 0] + prob[0, 1, 1, 1]
+    ac10 = prob[1, 0, 0, 0] + prob[1, 0, 0, 1] + prob[1, 1, 0, 0] + prob[1, 1, 0, 1]
+    ac11 = prob[1, 0, 1, 0] + prob[1, 0, 1, 1] + prob[1, 1, 1, 0] + prob[1, 1, 1, 1]
+
+    ad00 = prob[0, 0, 0, 0] + prob[0, 0, 1, 0] + prob[0, 1, 0, 0] + prob[0, 1, 1, 0]
+    ad01 = prob[0, 0, 0, 1] + prob[0, 0, 1, 1] + prob[0, 1, 0, 1] + prob[0, 1, 1, 1]
+    ad10 = prob[1, 0, 0, 0] + prob[1, 0, 1, 0] + prob[1, 1, 0, 0] + prob[1, 1, 1, 0]
+    ad11 = prob[1, 0, 0, 1] + prob[1, 0, 1, 1] + prob[1, 1, 0, 1] + prob[1, 1, 1, 1]
+
+    bc00 = prob[0, 0, 0, 0] + prob[0, 0, 0, 1] + prob[1, 0, 0, 0] + prob[1, 0, 0, 1]
+    bc01 = prob[0, 0, 1, 0] + prob[0, 0, 1, 1] + prob[1, 0, 1, 0] + prob[1, 0, 1, 1]
+    bc10 = prob[0, 1, 0, 0] + prob[0, 1, 0, 1] + prob[1, 1, 0, 0] + prob[1, 1, 0, 1]
+    bc11 = prob[0, 1, 1, 0] + prob[0, 1, 1, 1] + prob[1, 1, 1, 0] + prob[1, 1, 1, 1]
+
+    bd00 = prob[0, 0, 0, 0] + prob[0, 0, 1, 0] + prob[1, 0, 0, 0] + prob[1, 0, 1, 0]
+    bd01 = prob[0, 0, 0, 1] + prob[0, 0, 1, 1] + prob[1, 0, 0, 1] + prob[1, 0, 1, 1]
+    bd10 = prob[0, 1, 0, 0] + prob[0, 1, 1, 0] + prob[1, 1, 0, 0] + prob[1, 1, 1, 0]
+    bd11 = prob[0, 1, 0, 1] + prob[0, 1, 1, 1] + prob[1, 1, 0, 1] + prob[1, 1, 1, 1]
+
+    cd00 = prob[0, 0, 0, 0] + prob[0, 1, 0, 0] + prob[1, 0, 0, 0] + prob[1, 1, 0, 0]
+    cd01 = prob[0, 0, 0, 1] + prob[0, 1, 0, 1] + prob[1, 0, 0, 1] + prob[1, 1, 0, 1]
+    cd10 = prob[0, 0, 1, 0] + prob[0, 1, 1, 0] + prob[1, 0, 1, 0] + prob[1, 1, 1, 0]
+    cd11 = prob[0, 0, 1, 1] + prob[0, 1, 1, 1] + prob[1, 0, 1, 1] + prob[1, 1, 1, 1]
+
+    # Compute results
+    cdef DTYPE_t result1 = (
+        ab00 * np.log(ab00) + ab01 * np.log(ab01) + ab10 * np.log(ab10) + ab11 * np.log(ab11) +
+        cd00 * np.log(cd00) + cd01 * np.log(cd01) + cd10 * np.log(cd10) + cd11 * np.log(cd11)
+    )
+
+    cdef DTYPE_t result2 = (
+        ac00 * np.log(ac00) + ac01 * np.log(ac01) + ac10 * np.log(ac10) + ac11 * np.log(ac11) +
+        ad00 * np.log(ad00) + ad01 * np.log(ad01) + ad10 * np.log(ad10) + ad11 * np.log(ad11) +
+        bc00 * np.log(bc00) + bc01 * np.log(bc01) + bc10 * np.log(bc10) + bc11 * np.log(bc11) +
+        bd00 * np.log(bd00) + bd01 * np.log(bd01) + bd10 * np.log(bd10) + bd11 * np.log(bd11)
+    )
+
+    return para[0] * result1 + para[1] * result2
+
+    if inputs.testmode:
+        task="compute"
+        composition=[0.38225,0.61775]
+    
+        print("code test mod")
+        myCVM=CVM_loader("FCC",inputs,control_dict)
+        #myCVM=FYLCVM(inputs.number_of_component,inputs.max_clustersize,inputs.basic_cluster_energy,inputs.vibration_parameter,inputs.local_energy_parameter,inputs.elastic_parameter,control_dict)                                #maybe considering using a class creator later
+        if task=="point":
+            print("compute the energy of given point")
+            result=myCVM.optimize_free_energy(1,composition,"basinhopping")
+            myCVM.output_optimization(result,1,composition)
+        elif task=="trace":
+            dictin={'range': [7.4,7.6], 'T': 1, 'phase': ['L10', 'L12'],'composition':[0.42,0.38]}
+            phb=utility.phaseboundary(1,7.4,7.6,'L10', 'L12',0.42,0.38)
+            #(newphb,muT,starting_pointnumber)=myCVM.trace_phase_boundary_v1(dictin)
+            newphb=myCVM.trace_phase_boundary_v2(phb)
+            print(phb.x1mat)
+            print(phb.x2mat)
+            print(phb.Tspace)
+            #(newphb,muT,starting_pointnumber)=myCVM.trace_phase_boundary(dictin)
+            #print(myCVM.starting_point_list)
+            print(len(myCVM.node_list))
+        elif task=="compute":
+            #myCVM.compute_phase_diagram(control_dict['Tstart'],0,25,inputs.phasediagram_name)
+            myCVM.compute_phase_diagram_v2(control_dict['Tstart'],0,10,inputs.phasediagram_name)
+        elif task=="scatter":
+            #myCVM.scan_phase_diagram(control_dict['Tstart'],-75,75)
+            myCVM.scan_phase_diagram(1,0,10)
+        elif task=="scan":
+            myCVM.scan_phase_boundary(1,0,10)
+        elif task=="find":
+            myCVM.find_phase_boundary(500,900,[0.5,0.5],"brute")
+        elif task=="brute":
+            inputlist=[(10,-20,"L10"),(10,-10,"L10"),(10,0,"L12"),(10,10,"L12")]
+            for inputvalue in inputlist:
+                myCVM.plot_potential_surface(inputvalue[0],inputvalue[1],inputvalue[2])
+        elif task=="area":
+            #mu is between 24.23 and 24.25 composition is between 0.408 and 0.389 at T=500.00
+            Trange=np.array([490,520])
+            murange=np.array([23,45])
+            myCVM.plot_point_region(Trange,murange,5,0.1)
+        elif task=="test":
+            print("just check if input is correct")
+            print(inputs.phasediagram_name)
+        print("--- %s seconds ---" % (time.time() - start_time))

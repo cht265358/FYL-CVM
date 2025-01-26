@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import array
 import numpy as np
 import os
 import sys
@@ -13,20 +14,18 @@ from scipy.optimize import minimize
 from scipy.interpolate import splrep
 
 class plotting:
-    def __init__(self):
+    def __init__(self,logfilename="log.txt"):
         print("move everything to class later")
         self.phblist=[]
+        self.logfilename=logfilename
 
     def plot_phase_diagram(self,phase_boundary_list,signallist,dT,Tstart,filename="phasediagram.png",pointfile="point.txt",color='r'):
         print("plot phase diagram using data obtained from FYL-CVM")
         listlen=len(phase_boundary_list)
         signal_list=signallist.copy()         #protect signallist from modification
-        print(phase_boundary_list[1][2][-1])
-        print(phase_boundary_list[3][2][-1])
-        eutecticend=[[0.4],[0.45],[589]]
         slopelist=[[0,0]]*listlen
         for i in range(listlen):                #search invariant point first
-            if signal_list[i]==0:               #a phb that ends
+            if signal_list[i]==0 or signal_list[i]==1:               #a phb that ends
                 for j in range(i+1,listlen):
                     if np.abs(phase_boundary_list[i][2][-1]-phase_boundary_list[j][2][-1])<1.0e-6:     #is invariant point
                         slopelist[i],slopelist[j]=self.solve_invariant(phase_boundary_list[i],phase_boundary_list[j],dT,color)
@@ -179,13 +178,13 @@ def plot_phase_diagram(phase_boundary_list,signallist,dT,Tstart,filename="phased
     for i in range(listlen):
         if signal_list[i]==2:  
             finish_eutectic(phase_boundary_list[i],eutecticend,color)
-    plt.xlim(0.1, 0.5)
-    plt.ylim(1, 2.43)
+    #plt.xlim(0.1, 0.5)
+    #plt.ylim(1, 2.43)
     plt.xlabel("composition")
     plt.ylabel("normalized T")
     if filename:
         plt.savefig(filename)
-    #plt.show()
+    plt.show()
     #utility.replace_word_in_file("point.txt","array","np.array")
     #plt.clf()
 
@@ -299,8 +298,26 @@ def plot_scatter_rough(phblist,filename="scatter.png"):
     plt.savefig(filename)
     plt.show()
 
+def plot_area(phasedata,reverse=False,filename="points.png"):
+    plt.clf()
+    for i in range(phasedata.shape[0]):
+        phasepoint=phasedata[i]
+        plt.plot(float(phasepoint[0]),float(phasepoint[1]),'bo',color=matchcolor(phasepoint[2]))
+    #plt.xticks(np.arange(min(phasedata[:, 0]), max(phasedata[:, 0]), step=0.01))
+    if reverse:
+        plt.gca().invert_xaxis()
+    plt.show()
+
+def matchcolor(keyword):
+    if keyword=="L12":
+        return 'r'
+    elif keyword=="L10":
+        return 'g'
+    elif keyword=="A1":
+        return 'b'
+
 if __name__ == '__main__':
-    shell=1
+    shell=0
     if shell:
         signallist=np.array([2,0,0,0])
         print("shell mode, input whatever you want")
@@ -345,8 +362,8 @@ if __name__ == '__main__':
         plt.show()'''
         
     else:
-        signallist=[2,0,0,0]
-        with open("p1.05.txt", "r") as file:
+        signallist=[2,1,0,0]
+        with open("phase_boundary_list.txt", "r") as file:
         # Use eval to parse the file content as a Python list with numpy arrays
             xt = eval(file.read())
         mode="class"
@@ -354,7 +371,7 @@ if __name__ == '__main__':
             plot_phase_diagram(xt)
         elif mode=="class":
             myclass=plotting()
-            myclass.plot_phase_diagram(xt,signallist,0.05,1,'placeholder.png','point1.05.txt','g')
+            myclass.plot_phase_diagram(xt,signallist,0.05,1,'placeholder.png','zarbage.txt','g')
         else:
             plot_phase_diagram(xt,signallist,0.05,1,'placeholder.png','g')
         

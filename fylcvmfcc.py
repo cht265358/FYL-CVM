@@ -8,6 +8,7 @@ import utility
 import plotter
 import mapping
 import matplotlib.pyplot as plt
+import freeenergy           #This is cython library
 from scipy.optimize import minimize
 from scipy.optimize import brute
 from scipy.optimize import basinhopping
@@ -17,9 +18,11 @@ from fylcvm import FYLCVM
 #svm stands for site_variable_matrix
 
 class FCC(FYLCVM):       #sub class for FCC
-    def __init__(self,component,maxsize,E,vibration_parameter,local_parameter,elastic_para,control_dict):                #initialize all variables
-        super().__init__(component,maxsize,E,vibration_parameter,local_parameter,elastic_para,control_dict)
+    def __init__(self,inputs,control_dict):                #initialize all variables
+        super().__init__(inputs,control_dict)
         self.lattice="FCC"
+        self.map_basic_cluster_energy(inputs.basic_cluster_energy)
+        self.local_para=inputs.local_energy_parameter
 
     def map_basic_cluster_energy(self,E):     #map the basic cluster energy to high dimensional array
         self.basicclusterenergy=np.zeros(self.shape)                  #use high dimensional array, input by hand now
@@ -232,7 +235,7 @@ class FCC(FYLCVM):       #sub class for FCC
             mu+=product*np.log(product)*np.exp(self.basicclusterenergy[i][j][k][l])*T
 
         return total_energy,entropy,mu/partition
-
+    
     def compute_grand_potential(self,site_potential_input,T,mu):    #compute the grand cononical potential
         self.map_vibrational_energy(T)
         spm=np.zeros((self.component,self.clustersize))             #spm is site potential matrix
@@ -244,38 +247,23 @@ class FCC(FYLCVM):       #sub class for FCC
         if partition<0:
             return 1000.0
 
-        two_body_energy=0
-        for i in range(self.clustersize):                 #4*3*2*2 two body cluster
-            for j in range(i+1,self.clustersize):
-                for k,l in itertools.product(range(self.component), repeat=2):     #decorate this line later
-                    position_type_matrix=np.zeros((2,2))
-                    position_type_matrix[0][0]=i
-                    position_type_matrix[0][1]=j
-                    position_type_matrix[1][0]=k
-                    position_type_matrix[1][1]=l
-                    probij=utility.get_cluster_prob(prob,position_type_matrix)
-                    two_body_energy+=probij*np.log(probij)*self.R*T
+        two_body_energy=freeenergy.compute_binary_cluster_energy(prob,"FCC")*self.R*T
+
         #point cluster  
-        pointenergy=0
-        point_prob=np.zeros((self.component,self.clustersize))
+        pointenergy,point_prob=freeenergy.compute_point_cluster_energy(prob,"FCC")
+        pointenergy=pointenergy*self.R*T
+        #point_prob=np.zeros((self.component,self.clustersize))
+
         composition=np.zeros(self.component)
-        for i in range(self.clustersize):
-            for j in range(self.component):
-                position_type_matrix=np.zeros((2,1))
-                position_type_matrix[0][0]=i
-                position_type_matrix[1][0]=j
-                point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
-                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*self.R*T
-                composition[j]+=point_prob[j][i]*0.25
-        #basic cluster start with tetra as default        
         basic_cluster_energy=0                           
         for i in range(self.clustersize):
             for j in range(self.component):
+                composition[j]+=point_prob[j][i]*0.25
                 basic_cluster_energy+=point_prob[j][i]*spm[j][i]
         basic_cluster_energy-=self.R*T*np.log(partition)
         elastic_energy=self.elastic_parameter*composition[0]*composition[1]
         
-        total_energy=2*basic_cluster_energy-two_body_energy+1.25*pointenergy-composition[1]*mu+elastic_energy
+        total_energy=2*basic_cluster_energy+two_body_energy+pointenergy-composition[1]*mu+elastic_energy
         entropy=(2*np.sum(self.basicclusterenergy*prob)-total_energy)/T
         return total_energy
     
@@ -290,31 +278,14 @@ class FCC(FYLCVM):       #sub class for FCC
         if partition<0:
             return 1000.0
 
-        two_body_energy=0
-        for i in range(self.clustersize):                 #4*3*2*2 two body cluster
-            for j in range(i+1,self.clustersize):
-                for k,l in itertools.product(range(self.component), repeat=2):     #decorate this line later
-                    position_type_matrix=np.zeros((2,2))
-                    position_type_matrix[0][0]=i
-                    position_type_matrix[0][1]=j
-                    position_type_matrix[1][0]=k
-                    position_type_matrix[1][1]=l
-                    probij=utility.get_cluster_prob(prob,position_type_matrix)
-                    two_body_energy+=probij*np.log(probij)*T*self.R
+        two_body_energy=freeenergy.compute_binary_cluster_energy(prob,"FCC")*self.R*T
+
         #point cluster  
-        pointenergy=0
-        xb=0
-        point_prob=np.zeros((self.component,self.clustersize))
-        composition=np.zeros(self.component)
-        for i in range(self.clustersize):
-            for j in range(self.component):
-                position_type_matrix=np.zeros((2,1))
-                position_type_matrix[0][0]=i
-                position_type_matrix[1][0]=j
-                point_prob[j][i]=utility.get_cluster_prob(prob,position_type_matrix)
-                pointenergy+=point_prob[j][i]*np.log(point_prob[j][i])*T*self.R
-                composition[j]+=point_prob[j][i]*0.25
-        #basic cluster start with tetra as default        
+        pointenergy,point_prob=freeenergy.compute_point_cluster_energy(prob,"FCC")
+        pointenergy=pointenergy*self.R*T
+        #basic cluster start with tetra as default    
+        
+        composition=np.zeros(self.component)    
         basic_cluster_energy=0                           
         for i in range(self.clustersize):
             for j in range(self.component):
@@ -322,13 +293,13 @@ class FCC(FYLCVM):       #sub class for FCC
         basic_cluster_energy-=T*self.R*np.log(partition)
 
         E=0
-        for i,j,k,l in itertools.product(range(self.component), repeat=4):
-            E+=self.basicclusterenergy[i][j][k][l]*prob[i][j][k][l]
+        #for i,j,k,l in itertools.product(range(self.component), repeat=4):
+        #    E+=self.basicclusterenergy[i][j][k][l]*prob[i][j][k][l]
         
         elastic_energy=self.elastic_parameter*composition[0]*composition[1]
         grand_potential=2*basic_cluster_energy-two_body_energy+1.25*pointenergy-composition[1]*mu+elastic_energy
         F=grand_potential+composition[1]*mu
-        entropy=(2*np.sum(self.basicclusterenergy*prob)-F)/T
+        #entropy=(2*np.sum(self.basicclusterenergy*prob)-F)/T
         return grand_potential,composition,F,E
     
     def optimize_grand_potential(self,T,mu,method):
@@ -542,10 +513,13 @@ class FCC(FYLCVM):       #sub class for FCC
 
         while (self.Tmin<=T<=self.Tmax):
             T=round(self.dT*count*phb.direction+phb.Tstart,2)
+            print("T is "+str(T))
+            if T<self.Tmin:
+                break
             mustart+=utility.compute_dmu(phb.muspace)             #edit after compute_dmu() has value
             result=self.optimize_grand_potential(T,mustart,"BFGS_v2")               #try to get rid of this step later
             currentphase=self.identify_phase(result.x)
-            #print("current phase is "+currentphase)
+            print("current phase is "+currentphase)
             if currentphase==lowphase:
                 (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,self.dmurough,20)
                 if muend==1000:
@@ -561,24 +535,28 @@ class FCC(FYLCVM):       #sub class for FCC
                         phb.status="error"
                         return phb
                     else:
-                        self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-1)
+                        self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-phb.direction)
                         phb.status="exit"
+                        phb.signal=1
                         return phb        
                 if self.identify_phase(result2.x)!=highphase:                  #new phase found
                     print("new phase "+self.identify_phase(result2.x)+" detected, follow two new boundary")
-                    self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
+                    self.start_new_phb(T,mustart,muend,result1,result2,x1,x2,phb.direction)
                     (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,muend,self.dmurough,10)
                     if muend:
-                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
+                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2,phb.direction)
                         phb.status="exit"
+                        phb.signal=2
                     else:
-                        (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,muendsave,self.dmurough,10)
+                        (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,muendsave,self.dmurough,20)
                         if mustart:
-                            self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-1)
+                            self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-phb.direction)
                             phb.status="exit"
+                            phb.signal=2
                         else:
                             print("phase boundary end unexpectedly")
                             phb.status="error"
+                            phb.signal=-1
                     return phb
             elif currentphase==highphase:
                 #search_phase_boundary_v1 always from return mu low to high
@@ -591,69 +569,83 @@ class FCC(FYLCVM):       #sub class for FCC
                     return phb
                 elif muend==False:
                     #This corresponds to invariant point so start a new node connected to the old node, also the direction is -1
+                    print("can this even happen?")
                     (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,mustartsave,-self.dmurough,20)
                     if not mustart:
                         print("phase boundary end unexpectedly")
                         phb.status="error"
+                        phb.signal=-1
                         return phb
                     else:
-                        self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-1)
+                        self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-phb.direction)
                         phb.status="exit"
+                        phb.signal=1
                         return phb   
                 if self.identify_phase(result1.x)!=lowphase:
                     print("new phase "+self.identify_phase(result1.x)+" detected, follow two new boundary")
-                    self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
+                    self.start_new_phb(T,mustart,muend,result1,result2,x1,x2,phb.direction)
                     (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustart,-self.dmurough,10)
                     if muend:
-                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
+                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2,phb.direction)
                         phb.status="exit"
+                        phb.signal=2
                     else:
                         (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,mustartsave,-self.dmurough,10)
                         if mustart:
-                            self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-1)
+                            self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-phb.direction)
                             phb.status="exit"
+                            phb.signal=2
                         else:
                             print("phase boundary end unexpectedly")
                             phb.status="error"
+                            phb.signal=-1
                     return phb
             else:   
                 mustartuse=mustart       
                 print("new phase "+currentphase+" detected, start two new search")
                 (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,self.dmurough,20)    #one forward and one reverse
-                print("mustart is "+str(mustart))
-                print("muend is "+str(muend))
+                #print("mustart is "+str(mustart))
+                #print("muend is "+str(muend))
                 if muend and muend!=1000:   #edit later for unlikely boundary condition
-                    self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
+                    self.start_new_phb(T,mustart,muend,result1,result2,x1,x2,phb.direction)
                     (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,-self.dmurough,20)
                     if muend and muend!=1000:
-                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
+                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2,phb.direction)
                         phb.status="exit"
+                        phb.signal=2
                     elif muend==1000:
                         phb.status="exit"
+                        phb.signal=1
                     elif muend==False:
                         print("we are here?")
                         (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,mustartsave,-self.dmurough,10)
                         if mustart:
-                            self.start_new_phb(self.dT*phb.direction,mustart,muend,result1,result2,x1,x2)
+                            self.start_new_phb(self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,phb.direction)
                             phb.status="exit"
+                            phb.signal=2
                         else:
                             print("phase boundary end unexpectedly")
                             phb.status="error"
-                elif muend==False:
-                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,self.dmurough,10)    #The reverse search must have boundary
+                            phb.signal=-1
+                elif muend==False:  #we are here now
+                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T,mustartuse,-self.dmurough,20)    #The reverse search must have boundary
                     if not mustart:
                         print("phase boundary end unexpectedly")
                         phb.status="error"
+                        phb.signal=-1
                     else:
-                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2)
+                        self.start_new_phb(T,mustart,muend,result1,result2,x1,x2,phb.direction)
                         phb.status="exit"
-                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,mustartuse,self.dmurough,10)    #The reverse search must have boundary
+                    #This line has error too
+                    (mustart,muend,x1,x2,E1,E2,result1,result2)=self.search_phase_boundary_v1(T-self.dT*phb.direction,muendsave,self.dmurough,20)    #The reverse search must have boundary
                     if not mustart:
                         print("phase boundary end unexpectedly")
                         phb.status="error"
+                        phb.signal=-1
                     else:
-                        self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-1)
+                        self.start_new_phb(T-self.dT*phb.direction,mustart,muend,result1,result2,x1,x2,-phb.direction)
                         phb.status="exit"
+                        phb.signal=2
                 return phb
 
             #print("mustart is "+str(mustart)+" muend is "+str(muend)+" x1 is "+str(x1)+" x2 is "+str(x2)+" at T="+str(T))
@@ -693,7 +685,9 @@ class FCC(FYLCVM):       #sub class for FCC
         return False,False,cdata[i-1],cdata[i],Esave,E,resultsave,result
     
     def search_phase_boundary_bisection(self,T,mustart,muend,phasestart,phaseend,composition=np.array([0,1])):        #only use this function to search within a given range
+        reverse=0
         if mustart>muend:
+            reverse=1
             mustart,muend=muend,mustart         #make sure mustart is always smaller
             phasestart,phaseend=phaseend,phasestart
         resultlist=[]
@@ -703,7 +697,11 @@ class FCC(FYLCVM):       #sub class for FCC
             resultlist.append(result)
             phasemid=self.identify_phase(result.x)
             if phasemid!=phasestart and phasemid!=phaseend:        #need recursion
-                print("new phase "+phasemid+" detected?")
+                print("new phase "+phasemid+" detected? Steplength for phb search might be too big")
+                if reverse:
+                    return self.search_phase_boundary_bisection(T,mumid,muend,phasemid,phaseend)
+                else:
+                    return self.search_phase_boundary_bisection(T,mustart,mumid,phasestart,phasemid)
             elif phasemid==phaseend:
                 muend=mumid
             elif phasemid==phasestart:
@@ -770,11 +768,15 @@ class FCC(FYLCVM):       #sub class for FCC
                     self.node_list[i]=self.trace_phase_boundary_v2(self.node_list[i])
                     phblist=np.stack((self.node_list[i].x1mat,self.node_list[i].x2mat,self.node_list[i].Tspace))
                     self.phase_boundary_list.append(utility.order_phb(phblist))
+                    self.phb_status_list.append(self.node_list[i].signal)
         f=open(phbfile_name,"w")
         print(self.phase_boundary_list,file=f)
         f.close()
-        utility.replace_word_in_file("phase_boundary_list.txt","array","np.array")          #make the output file that can be directly used by plotter
-        plotter.plot_phase_diagram_rough(self.phase_boundary_list)
+        utility.replace_word_in_file(phbfile_name,"array","np.array")          #make the output file that can be directly used by plotter
+        #print(self.phase_boundary_list)
+        #signal_list=[2,0,0,0]
+        print(self.phb_status_list)
+        #plotter.plot_phase_diagram(self.phase_boundary_list,self.phb_status_list,self.dT,Tstart,phase_diagram_name)
 
     def plot_phase_diagram0(self,filename):
         for i in range(len(self.phase_boundary_list)):
@@ -804,8 +806,21 @@ class FCC(FYLCVM):       #sub class for FCC
         #print("free energy is "+str(result.fun)+" site variable is "+str(svm[1])+" at temperature "+str(T))
         print("free energy is "+str(result.fun+mu*component_comp[1])+" site variable is "+str(svm)+" composition is "+str(component_comp)+" potential is "+str(mu))
 
-    def print_output(self):
-        print("hello world")
+    def plot_point_region(self,Trange,murange,Tstep,mustep):
+        data = np.zeros((0, 3))
+        muTdata = np.zeros((0, 3))
+        Tarray=np.arange(Trange[0],Trange[1],Tstep)
+        muarray=np.arange(murange[0],murange[1],mustep)
+        for T in Tarray:
+            for mu in muarray:
+                result=self.optimize_grand_potential(T,mu,"BFGS_v2")
+                GP,composition,F,E=self.compute_grand_potential_output(result.x,T,mu)
+                phase=self.identify_phase(result.x)
+                data=np.append(data,np.array([[composition[0], T, phase]]),axis=0)
+                muTdata=np.append(muTdata,np.array([[mu, T, phase]]),axis=0)
+        #print(data)
+        plotter.plot_area(data)
+        plotter.plot_area(muTdata,True)
 
     def plotGx(self,T,mustart,muend,dmu=0.05):
         muarr=np.arange(mustart,muend,dmu)
